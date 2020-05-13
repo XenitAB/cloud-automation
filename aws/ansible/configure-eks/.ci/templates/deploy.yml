@@ -34,6 +34,7 @@ jobs:
             scriptType: inline
             inlineScript: |
               set -e
+              cd $(workingDirectory)
               pip install -U pip
               pip install -r requirements.txt 
               ansible-playbook -i configure-eks/hosts configure-eks/configure-eks.yml -e "environmentShort=${{ parameters.environment }}" -e "ansible_python_interpreter=$(python.pythonLocation)/bin/python" --flush-cache

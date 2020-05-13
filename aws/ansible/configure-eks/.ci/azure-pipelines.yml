@@ -1,6 +1,8 @@
 variables:
   - name: vmImage
     value: "ubuntu-latest"
+  - name: workingDirectory
+    value: aws/ansible/configure-eks
   - name: devEnvEnabled
     value: true
   - name: qaEnvEnabled

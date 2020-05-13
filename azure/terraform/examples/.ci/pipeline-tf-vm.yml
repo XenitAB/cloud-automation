@@ -1,5 +1,7 @@
 variables:
   - group: terraform-encryption
+  - name: workingDirectory
+    value: azure/terraform/examples
   - name: devEnvEnabled
     value: true
   - name: qaEnvEnabled

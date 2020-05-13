@@ -19,6 +19,7 @@ jobs:
       addSpnToEnvironment: true
       scriptLocation: inlineScript
       inlineScript: |
+        cd $(workingDirectory)
         if [[ $opaBlastRadius == ?(-)+([0-9]) ]]; then
           blastRadius=$opaBlastRadius
         else
