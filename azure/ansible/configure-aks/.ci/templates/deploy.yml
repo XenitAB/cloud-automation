@@ -33,6 +33,7 @@ jobs:
             scriptLocation: inlineScript
             inlineScript: |
               set -e
+              cd $(workingDirectory)
               pip install -U pip
               pip install -r requirements.txt 
               ansible-playbook -i configure-aks/hosts configure-aks/configure-aks.yml -e "environmentShort=${{ parameters.environment }}" -e "ansible_python_interpreter=$(python.pythonLocation)/bin/python" --flush-cache

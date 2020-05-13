@@ -1,4 +1,6 @@
 variables:
+  - name: workingDirectory
+    value: azure/ansible/configure-aks
   - name: vmImage
     value: "ubuntu-latest"
   - name: devEnvEnabled
