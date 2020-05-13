@@ -50,8 +50,8 @@ Param(
     [string]$artifactPath,
     [bool]$createBackendBucket = $true,
     [string]$tfBackendKey = "$($tfFolderName)/$($environmentShort).tfstate",
-    [string]$tfBackendRegion = "eu-west-1",
-    [string]$tfBackendRegionShort = "ew1",
+    [string]$tfBackendRegion = "eu-north-1",
+    [string]$tfBackendRegionShort = "en1",
     [string]$tfBackendBucket = "s3-$($environmentShort)-$($tfBackendRegionShort)-tfstate",
     [int]$opaBlastRadius = 50
 )

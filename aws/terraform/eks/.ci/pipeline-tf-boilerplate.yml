@@ -1,7 +1,7 @@
 variables:
   - group: terraform-encryption
   - name: awsRegion
-    value: "eu-west-1"
+    value: "eu-north-1"
   - name: devEnvEnabled
     value: true
   - name: qaEnvEnabled
