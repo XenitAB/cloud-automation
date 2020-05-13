@@ -27,7 +27,7 @@ resource "aws_subnet" "subnetEks" {
 
 
   tags = {
-    Name                                                                                                        = "subnet-${var.environment}-${var.locationShort}-${var.commonName}-${each.value.name}"
-    "kubernetes.io/cluster/eks-${var.environment}-${var.locationShort}-${var.commonName}-${each.value.eksName}" = "shared"
+    Name                                                                                      = "subnet-${var.environment}-${var.locationShort}-${var.commonName}-${each.value.name}"
+    "kubernetes.io/cluster/eks-${var.environment}-${var.locationShort}-${each.value.eksName}" = "shared"
   }
 }
