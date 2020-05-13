@@ -75,9 +75,9 @@ ansible-playbook -i configure-eks/hosts configure-eks/configure-eks.yml -e "envi
 * Go to terraform folder: `cd ../../terraform/eks`
 * Clean up s3 bucket for velero
 * Clean up dns records in route53 zone
+* Destroy EKS: `pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName tf-eks -destroy`
 * Clean up EC2 Load Balancers
 * Clean up EC2 Network Interfaces
-* Destroy EKS: `pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName tf-eks -destroy`
 * Destroy core infrastructure: `pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName tf-core-infra -destroy`
 
 ## Other cleanup
