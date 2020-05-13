@@ -24,7 +24,7 @@ trigger:
       - master
   paths:
     include:
-      - tf-azpipelines
+      - azure/terraform/examples/tf-azpipelines
 
 stages:
   - template: templates/pipeline.yml

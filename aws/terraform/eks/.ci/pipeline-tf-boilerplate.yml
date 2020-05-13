@@ -28,7 +28,7 @@ trigger:
       - master
   paths:
     include:
-      - tf-boilerplate
+      - aws/terraform/eks/tf-boilerplate
 
 pr:
   branches:
@@ -36,7 +36,7 @@ pr:
       - master
   paths:
     include:
-      - tf-boilerplate
+      - aws/terraform/eks/tf-boilerplate
 
 stages:
   - template: templates/pipeline.yml

@@ -26,7 +26,7 @@ trigger:
       - master
   paths:
     include:
-      - tf-ctxadm
+      - azure/terraform/examples/tf-ctxadm
 
 stages:
   - template: templates/pipeline.yml

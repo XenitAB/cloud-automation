@@ -26,7 +26,7 @@ trigger:
       - master
   paths:
     include:
-      - tf-core-infra
+      - aws/terraform/eks/tf-core-infra
 
 pr:
   branches:
@@ -34,7 +34,7 @@ pr:
       - master
   paths:
     include:
-      - tf-core-infra
+      - aws/terraform/eks/tf-core-infra
 
 stages:
   - template: templates/pipeline.yml

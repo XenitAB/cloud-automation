@@ -17,6 +17,11 @@ trigger:
   branches:
     include:
       - master
+  paths:
+    include:
+      - azure/ansible/configure-aks
+
+pr: none
 
 stages:
   - template: templates/pipeline.yml
