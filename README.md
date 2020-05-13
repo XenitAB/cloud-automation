@@ -28,3 +28,9 @@ No guarantees for anything, but feel free to do a PR or post an issue. If you ne
 ### AWS Ansible
 
 * [Configure EKS Readme](aws/ansible/configure-eks/README.md)
+
+# Meetups
+
+## CloudNativeGbg
+
+* [CloudNativeGbg #12 - Chill out evening](meetups/CloudNativeGbg/CloudNativeGbg12.md)
