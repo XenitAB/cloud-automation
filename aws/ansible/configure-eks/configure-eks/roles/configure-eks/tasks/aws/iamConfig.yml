@@ -1,0 +1,53 @@
+- name: Create IAM Role - {{ shortName }}
+  iam_role:
+    name: "iam-role-eks-{{ shortName }}"
+    assume_role_policy_document: "{{ assumeRolePolicyDocument | to_json }}"
+    state: "{{ iamState }}"
+  register: iamRole
+  tags:
+    - aws
+
+- name: Set fact for IAM Policy - {{ shortName }}
+  set_fact:
+    iamPolicy:
+      Version: "2012-10-17"
+      Statement:
+        Effect: Allow
+        Action: sts:AssumeRole
+        Resource: "{{ iamRole.arn }}"
+  tags:
+    - aws
+
+- name: Create IAM Managed Policy - {{ shortName }}
+  iam_managed_policy:
+    policy_name: "iam-policy-eks-{{ shortName }}"
+    policy: "{{ iamPolicy | to_json }}"
+    state: "{{ iamState }}"
+  tags:
+    - aws
+
+- name: Create IAM Group - {{ shortName }}
+  iam_group:
+    name: "iam-group-eks-{{ shortName }}"
+    managed_policy:
+      - "iam-policy-eks-{{ shortName }}"
+    state: "{{ iamState }}"
+  register: iamGroup
+  tags:
+    - aws
+
+- name: Set facts for IAM Details
+  set_fact:
+    iamDetails:
+      shortName: "{{ shortName }}"
+      iamGroupArn: "{{ iamGroup.iam_group.group.arn }}"
+      iamRoleArn: "{{ iamRole.arn }}"
+  tags:
+    - aws
+
+- name: Set facts IAM Array
+  set_fact:
+    iamArray: "{{ (iamArray | default([])) + [ iamDetails ] }}"
+  when: iamState == "present"
+  tags:
+    - aws

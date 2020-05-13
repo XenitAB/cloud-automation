@@ -1,0 +1,38 @@
+variables:
+  - group: terraform-encryption
+  - name: awsRegion
+    value: "eu-west-1"
+  - name: devEnvEnabled
+    value: true
+  - name: qaEnvEnabled
+    value: false
+  - name: prodEnvEnabled
+    value: false
+  - name: tfVersion
+    value: "0.12.24"
+  - name: vmImage
+    value: "ubuntu-latest"
+  - name: tfFolderName
+    value: "tf-eks"
+
+name: $(Build.BuildId)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - tf-eks
+
+pr:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - tf-eks
+
+stages:
+  - template: templates/pipeline.yml

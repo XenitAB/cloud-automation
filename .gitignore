@@ -1,0 +1,6 @@
+# Ansible
+.venv
+*.retry
+
+# Terraform
+.terraform

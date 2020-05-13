@@ -1,0 +1,12 @@
+#jinja2: trim_blocks:False
+- rolearn: {{ iamRoleArnNodeGroup.iam_roles[0].arn }}
+  username: system:node:{% raw %}{{EC2PrivateDNSName}}{% endraw %}
+  groups:
+    - system:bootstrappers
+    - system:nodes
+{% for role in iamArray %}
+- rolearn: {{ role.iamRoleArn }}
+  username: {{ role.shortName }}
+  groups:
+    - {{ role.shortName }}
+{% endfor %}

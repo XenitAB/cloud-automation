@@ -1,0 +1,198 @@
+- name: Set fact for certManager tempdir
+  set_fact:
+    certManagerTempDir: "/tmp/certManager-{{ ansible_date_time.iso8601_basic_short }}"
+  tags:
+    - certManager
+
+- name: Set Azure facts for certManager
+  set_fact:
+    cmAzure: "{{ lookup('env', 'externalDns') | b64decode | from_json }}"
+  tags:
+    - certManager
+
+- name: Configure CAA record
+  azure_rm_resource:
+    resource_group: "{{ resourceGroupName }}"
+    provider: Network
+    resource_type: dnsZones
+    resource_name: "{{ externalDnsZone }}/CAA/@"
+    api_version: "2018-05-01"
+    method: PUT
+    body:
+      properties:
+        caaRecords:
+          - tag: issue
+            flags: 0
+            value: letsencrypt.org
+        TTL: 3600
+  when: configuration.certManager.state == "present"
+  tags:
+    - certManager
+
+- name: Download and apply helm template
+  block:
+    - name: Add certManager namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.certManager.namespace }}"
+            labels: "{{ configuration.certManager.labels | combine({'name': configuration.certManager.namespace}) }}"
+      when: configuration.certManager.state == "present"
+      tags:
+        - certManager
+
+    - name: Helm init
+      shell: "{{ helm.binDir }}/helm init --client-only"
+      tags:
+        - certManager
+
+    - name: Helm repo add
+      shell: "{{ helm.binDir }}/helm repo add {{ configuration.certManager.helmRepoName }} {{ configuration.certManager.helmRepo }}"
+      tags:
+        - certManager
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helm repo update"
+      tags:
+        - certManager
+
+    - name: Fetch helm chart for certManager
+      shell: "{{ helm.binDir }}/helm fetch --untar --untardir {{ certManagerTempDir }} --version {{ configuration.certManager.helmChartVersion }} {{ configuration.certManager.helmRepoName }}/{{ configuration.certManager.helmChartName }}"
+      tags:
+        - certManager
+
+    - name: Download certManager CRDs
+      get_url:
+        url: "{{ configuration.certManager.crdUrl }}"
+        checksum: "{{ configuration.certManager.crdChecksum }}"
+        dest: "{{ certManagerTempDir }}/crds.yaml"
+      tags:
+        - certManager
+
+    - name: Generate kubernetes manifest for certManager
+      shell: '{{ helm.binDir }}/helm template "{{ certManagerTempDir }}/{{ configuration.certManager.helmChartName }}" --name {{ configuration.certManager.helmChartName }} --namespace {{ configuration.certManager.namespace }} > {{ certManagerTempDir }}/certManager.yaml'
+      tags:
+        - certManager
+
+    - name: Install certManager CRDs
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply --validate=false -f "{{ certManagerTempDir }}/crds.yaml"'
+      when: configuration.certManager.state == "present"
+      register: certManagerCrdManifestResult
+      retries: 5
+      delay: 5
+      until: certManagerCrdManifestResult is succeeded
+      tags:
+        - certManager
+
+    - name: Install certManager
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply -f "{{ certManagerTempDir }}/certManager.yaml"'
+      when: configuration.certManager.state == "present"
+      register: certManagerManifestResult
+      retries: 5
+      delay: 5
+      until: certManagerManifestResult is succeeded
+      tags:
+        - certManager
+
+    - name: Remove certManager
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" delete --ignore-not-found=true -f "{{ certManagerTempDir }}/certManager.yaml"'
+      when: configuration.certManager.state == "absent"
+      tags:
+        - certManager
+
+    - name: Remove certManager CRDs
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" delete --ignore-not-found=true -f "{{ certManagerTempDir }}/crds.yaml"'
+      when: configuration.certManager.state == "absent"
+      tags:
+        - certManager
+
+    - name: Remove certManager namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.certManager.namespace }}"
+      when: configuration.certManager.state == "absent"
+      tags:
+        - certManager
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ certManagerTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - certManager
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ certManagerTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - certManager
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - certManager
+
+- name: Create secret for cert-manager AzureDNS
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    namespace: "{{ configuration.certManager.namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: azuredns-config
+      type: Opaque
+      data:
+        CLIENT_SECRET: "{{ cmAzure.aadClientSecret | b64encode }}"
+  when: configuration.certManager.state == "present"
+  tags:
+    - certManager
+
+- name: Add cert-manager issuer
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: cert-manager.io/v1alpha2
+      kind: ClusterIssuer
+      metadata:
+        name: letsencrypt-prod
+      spec:
+        acme:
+          server: https://acme-v02.api.letsencrypt.org/directory
+          email: "webmaster@{{ externalDnsZone }}"
+          privateKeySecretRef:
+            name: letsencrypt-prod
+          solvers:
+            - dns01:
+                azuredns:
+                  clientID: "{{ cmAzure.aadClientId }}"
+                  clientSecretSecretRef:
+                    name: azuredns-config
+                    key: CLIENT_SECRET
+                  subscriptionID: "{{ cmAzure.subscriptionId }}"
+                  tenantID: "{{ cmAzure.tenantId }}"
+                  resourceGroupName: "{{ cmAzure.resourceGroup }}"
+                  hostedZoneName: "{{ externalDnsZone }}"
+  when: configuration.certManager.state == "present"
+  register: certManagerIssuerResult
+  retries: 20
+  delay: 30
+  until: certManagerIssuerResult is succeeded
+  tags:
+    - certManager

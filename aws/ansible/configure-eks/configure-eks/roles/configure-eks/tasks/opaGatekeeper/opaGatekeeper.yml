@@ -1,0 +1,125 @@
+- name: Set fact for opaGatekeeper tempdir
+  set_fact:
+    opaGatekeeperTempDir: "/tmp/opaGatekeeper-{{ ansible_date_time.iso8601_basic_short }}"
+  tags:
+    - opaGatekeeper
+
+- name: Download and apply helm template
+  block:
+    - name: Add opaGatekeeper namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.opaGatekeeper.namespace }}"
+            labels: "{{ configuration.opaGatekeeper.labels | combine({'name': configuration.opaGatekeeper.namespace}) }}"
+      when: configuration.opaGatekeeper.state == "present"
+      tags:
+        - opaGatekeeper
+
+    - git:
+        repo: "{{ configuration.opaGatekeeper.gitRepo }}"
+        dest: "{{ opaGatekeeperTempDir }}/gatekeeper"
+        version: "{{ configuration.opaGatekeeper.gitReleaseTag }}"
+      tags:
+        - opaGatekeeper
+
+    - name: Helm init
+      shell: "{{ helm.binDir }}/helm init --client-only"
+      tags:
+        - opaGatekeeper
+
+    - name: Generate kubernetes manifest for opaGatekeeper
+      shell: '{{ helm.binDir }}/helm template "{{ opaGatekeeperTempDir }}/gatekeeper/chart/gatekeeper-operator" --name {{ configuration.opaGatekeeper.name }} --namespace {{ configuration.opaGatekeeper.namespace }} > {{ opaGatekeeperTempDir }}/opaGatekeeper.yaml'
+      tags:
+        - opaGatekeeper
+
+    - name: Install opaGatekeeper
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply -f "{{ opaGatekeeperTempDir }}/opaGatekeeper.yaml"'
+      when: configuration.opaGatekeeper.state == "present"
+      register: opaGatekeeperManifestResult
+      retries: 5
+      delay: 5
+      until: opaGatekeeperManifestResult is succeeded
+      tags:
+        - opaGatekeeper
+
+    - name: Remove opaGatekeeper
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" delete --ignore-not-found=true -f "{{ opaGatekeeperTempDir }}/opaGatekeeper.yaml"'
+      when: configuration.opaGatekeeper.state == "absent"
+      tags:
+        - opaGatekeeper
+
+    - name: Remove opaGatekeeper namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.opaGatekeeper.namespace }}"
+      when: configuration.opaGatekeeper.state == "absent"
+      tags:
+        - opaGatekeeper
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ opaGatekeeperTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - opaGatekeeper
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ opaGatekeeperTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - opaGatekeeper
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - opaGatekeeper
+
+- name: OPA Gatekeeper - Configuration
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    namespace: "{{ configuration.opaGatekeeper.namespace }}"
+    definition:
+      apiVersion: config.gatekeeper.sh/v1alpha1
+      kind: Config
+      metadata:
+        name: config
+      spec:
+        sync:
+          syncOnly:
+            - group: "extensions"
+              version: "v1beta1"
+              kind: "Ingress"
+            - group: "networking.k8s.io"
+              version: "v1beta1"
+              kind: "Ingress"
+  when: configuration.opaGatekeeper.state == "present"
+  tags:
+    - opaGatekeeper
+
+- name: Include k8sRequiredAnnotations
+  include_tasks: k8sRequiredAnnotations.yml
+  when: configuration.opaGatekeeper.state == "present"
+  tags:
+    - opaGatekeeper
+
+- name: Include k8sHttpsOnly
+  include_tasks: k8sHttpsOnly.yml
+  when: configuration.opaGatekeeper.state == "present"
+  tags:
+    - opaGatekeeper

@@ -1,0 +1,26 @@
+stages:
+- stage: Deploy_dev
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_dev
+      vmImage: $(vmImage)
+      environment: dev
+
+# - stage: Deploy_qa
+#   dependsOn: [Deploy_dev]
+#   jobs:
+#   - template: deploy.yml
+#     parameters:
+#       deployment: Deploy_qa
+#       vmImage: $(vmImage)
+#       environment: qa
+
+# - stage: Deploy_prod
+#   dependsOn: [Deploy_qa]
+#   jobs:
+#   - template: deploy.yml
+#     parameters:
+#       deployment: Deploy_prod
+#       vmImage: $(vmImage)
+#       environment: prod

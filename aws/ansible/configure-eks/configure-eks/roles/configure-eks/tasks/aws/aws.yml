@@ -1,0 +1,43 @@
+- name: Set fact for assume role policy document
+  set_fact:
+    assumeRolePolicyDocument:
+      Version: "2012-10-17"
+      Statement:
+        - Effect: Allow
+          Principal:
+            AWS: "arn:aws:iam::{{ awsCallerInfo.account }}:root"
+          Action: sts:AssumeRole
+
+- name: IAM Configuration for cluster-admin
+  include_tasks: iamConfig.yml
+  vars:
+    shortName: cluster-admin
+    iamState: present
+  tags:
+    - aws
+
+- name: IAM Configuration for cluster-viewer
+  include_tasks: iamConfig.yml
+  vars:
+    shortName: cluster-viewer
+    iamState: present
+  tags:
+    - aws
+
+- name: IAM Configuration for namespace-edit
+  include_tasks: iamConfig.yml
+  vars:
+    shortName: "{{ item.name }}-edit"
+    iamState: "{{ item.state }}"
+  loop: "{{ configuration.namespaces }}"
+  tags:
+    - aws
+
+- name: IAM Configuration for namespace-view
+  include_tasks: iamConfig.yml
+  vars:
+    shortName: "{{ item.name }}-view"
+    iamState: "{{ item.state }}"
+  loop: "{{ configuration.namespaces }}"
+  tags:
+    - aws

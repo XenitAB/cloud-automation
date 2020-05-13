@@ -1,0 +1,6 @@
+locationShort: we
+commonName: aks
+environment: production
+externalDnsZone: tflab-prod.xenit.io
+ingressReplicas: 2
+citrixAdmAgentIp: 192.168.0.1

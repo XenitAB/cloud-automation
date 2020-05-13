@@ -1,0 +1,119 @@
+- name: OPA Gatekeeper - Required Annotations - ConstraintTemplate
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: templates.gatekeeper.sh/v1beta1
+      kind: ConstraintTemplate
+      metadata:
+        name: k8srequiredannotations
+      spec:
+        crd:
+          spec:
+            names:
+              kind: K8sRequiredAnnotations
+            validation:
+              openAPIV3Schema:
+                properties:
+                  message:
+                    type: string
+                  annotations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        allowedRegex:
+                          type: string
+        targets:
+          - target: admission.k8s.gatekeeper.sh
+            rego: |
+              package k8srequiredannotations
+              get_message(parameters, _default) = msg {
+                not parameters.message
+                msg := _default
+              }
+              get_message(parameters, _default) = msg {
+                msg := parameters.message
+              }
+              violation[{"msg": msg, "details": {"missing_annotations": missing}}] {
+                provided := {annotation | input.review.object.metadata.annotations[annotation]}
+                required := {annotation | annotation := input.parameters.annotations[_].key}
+                missing := required - provided
+                count(missing) > 0
+                def_msg := sprintf("you must provide annotations: %v", [missing])
+                msg := get_message(input.parameters, def_msg)
+              }
+              violation[{"msg": msg}] {
+                value := input.review.object.metadata.annotations[key]
+                expected := input.parameters.annotations[_]
+                expected.key == key
+                expected.allowedRegex != ""
+                not re_match(expected.allowedRegex, value)
+                def_msg := sprintf("Annotation <%v: %v> does not satisfy allowed regex: %v", [key, value, expected.allowedRegex])
+                msg := get_message(input.parameters, def_msg)
+              }
+  when: configuration.opaGatekeeper.state == "present"
+  register: opaGatekeeperRequiredAnnotations
+  retries: 5
+  delay: 5
+  until: opaGatekeeperRequiredAnnotations is succeeded
+  tags:
+    - opaGatekeeper
+
+- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-class
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: constraints.gatekeeper.sh/v1beta1
+      kind: K8sRequiredAnnotations
+      metadata:
+        name: ingress-insecure-termination
+      spec:
+        enforcementAction: deny
+        match:
+          kinds:
+            - apiGroups: ["extensions", "networking.k8s.io"]
+              kinds: ["Ingress"]
+        parameters:
+          message: "All ingress objects must have the annotation `ingress.citrix.com/insecure-termination: redirect`"
+          annotations:
+            - key: ingress.citrix.com/insecure-termination
+              allowedRegex: "^redirect$"
+  when: configuration.opaGatekeeper.state == "present"
+  register: opaGatekeeperInsecureTermination
+  retries: 5
+  delay: 5
+  until: opaGatekeeperInsecureTermination is succeeded
+  tags:
+    - opaGatekeeper
+
+- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-insecure-termination
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: constraints.gatekeeper.sh/v1beta1
+      kind: K8sRequiredAnnotations
+      metadata:
+        name: ingress-class
+      spec:
+        enforcementAction: deny
+        match:
+          kinds:
+            - apiGroups: ["extensions", "networking.k8s.io"]
+              kinds: ["Ingress"]
+        parameters:
+          message: "All ingress objects must have the annotation `kubernetes.io/ingress.class: citrix-ingress`"
+          labels:
+            - key: kubernetes.io/ingress.class
+              allowedRegex: "^citrix-ingress$"
+  when: configuration.opaGatekeeper.state == "present"
+  register: opaGatekeeperIngressClass
+  retries: 5
+  delay: 5
+  until: opaGatekeeperIngressClass is succeeded
+  tags:
+    - opaGatekeeper

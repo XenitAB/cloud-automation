@@ -1,0 +1,126 @@
+- name: Set fact for velero tempdir
+  set_fact:
+    veleroTempDir: "/tmp/velero-{{ ansible_date_time.iso8601_basic_short }}"
+    veleroServiceAccountArn: "arn:aws:iam::{{ awsCallerInfo.account }}:role/iam-role-eks-sa-velero"
+  tags:
+    - velero
+
+- name: Download and apply helm template
+  block:
+    - name: Add velero namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.velero.namespace }}"
+            labels: "{{ configuration.velero.labels | combine({'name': configuration.velero.namespace}) }}"
+      when: configuration.velero.state == "present"
+      register: veleroNamespace
+      retries: 5
+      delay: 10
+      until: veleroNamespace is succeeded
+      tags:
+        - velero
+
+    - name: Helm repo add vmware-tanzu
+      shell: "{{ helm.binDir }}/helmv3 repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts"
+      tags:
+        - velero
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
+      tags:
+        - velero
+
+    - name: Install velero
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --install --namespace {{ configuration.velero.namespace }} --set configuration.provider=aws --set configuration.backupStorageLocation.name=default --set configuration.backupStorageLocation.bucket={{ configuration.velero.awsS3Bucket }} --set configuration.backupStorageLocation.config.region={{ location }} --set snapshotsEnable=false --set image.repository=velero/velero --set image.tag={{ configuration.velero.version }} --set image.pullPolicy=IfNotPresent --set initContainers[0].name=velero-plugin-for-aws --set initContainers[0].image=velero/velero-plugin-for-aws:{{ configuration.velero.awsPluginVersion }} --set initContainers[0].volumeMounts[0].mountPath=/target --set initContainers[0].volumeMounts[0].name=plugins --set securityContext.fsGroup=1337 --set serviceAccount.server.annotations."eks\.amazonaws\.com/role-arn"="{{ veleroServiceAccountArn }}" velero vmware-tanzu/velero'
+      register: veleroInstallResult
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Configure daily full backups
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "{{ configuration.velero.state }}"
+        namespace: "{{ configuration.velero.namespace }}"
+        definition:
+          apiVersion: velero.io/v1
+          kind: Schedule
+          metadata:
+            name: daily-full-backups
+            labels:
+              frequency: daily
+              full: "true"
+          spec:
+            schedule: "0 2 * * *"
+            template:
+              ttl: 960h0m0s
+      tags:
+        - velero
+
+    - name: Configure hourly minimal backups
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "{{ configuration.velero.state }}"
+        namespace: "{{ configuration.velero.namespace }}"
+        definition:
+          apiVersion: velero.io/v1
+          kind: Schedule
+          metadata:
+            name: hourly-minimal-backups
+            labels:
+              frequency: hourly
+              full: "false"
+          spec:
+            schedule: "15 */1 * * *"
+            template:
+              snapshotVolumes: false
+              ttl: 960h0m0s
+      tags:
+        - velero
+
+    - name: Remove velero
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.velero.namespace }} uninstall velero'
+      when: configuration.velero.state == "absent"
+      tags:
+        - velero
+
+    - name: Remove velero namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.velero.namespace }}"
+      when: configuration.velero.state == "absent"
+      tags:
+        - velero
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ veleroTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - velero
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ veleroTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - velero
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - velero

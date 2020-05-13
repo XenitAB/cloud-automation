@@ -1,0 +1,183 @@
+- name: Set fact for velero tempdir
+  set_fact:
+    veleroTempDir: "/tmp/velero-{{ ansible_date_time.iso8601_basic_short }}"
+  tags:
+    - velero
+
+- name: Download and apply helm template
+  block:
+    - name: Add velero namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.velero.namespace }}"
+            labels: "{{ configuration.velero.labels | combine({'name': configuration.velero.namespace}) }}"
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Create velero configuration variable
+      set_fact:
+        veleroSecretConfiguration:
+          AZURE_SUBSCRIPTION_ID: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_SUBSCRIPTION_ID | b64encode }}"
+          AZURE_TENANT_ID: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_TENANT_ID | b64encode }}"
+          AZURE_CLIENT_ID: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_CLIENT_ID | b64encode }}"
+          AZURE_CLIENT_SECRET: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_CLIENT_SECRET | b64encode }}"
+          AZURE_RESOURCE_GROUP: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_RESOURCE_GROUP | b64encode }}"
+        veleroConfig:
+          AZURE_RESOURCE_GROUP: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_RESOURCE_GROUP }}"
+          AZURE_STORAGE_ACCOUNT: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_STORAGE_ACCOUNT }}"
+          AZURE_STORAGE_ACCOUNT_CONTAINER: "{{ (lookup('env', 'kubernetesBackup') | b64decode | from_json).AZURE_STORAGE_ACCOUNT_CONTAINER }}"
+      tags:
+        - velero
+
+    - name: Helm init
+      shell: "{{ helm.binDir }}/helm init --client-only"
+      tags:
+        - velero
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helm repo update"
+      tags:
+        - velero
+
+    - name: Fetch helm chart for velero
+      shell: "{{ helm.binDir }}/helm fetch --untar --untardir {{ veleroTempDir }} --version {{ configuration.velero.helmChartVersion }} stable/{{ configuration.velero.helmChartName }}"
+      tags:
+        - velero
+
+    - name: Generate kubernetes manifest for velero
+      shell: '{{ helm.binDir }}/helm template "{{ veleroTempDir }}/{{ configuration.velero.helmChartName }}" --name {{ configuration.velero.helmChartName }} --namespace {{ configuration.velero.namespace }} --set configuration.provider=azure --set configuration.backupStorageLocation.name=azure --set configuration.backupStorageLocation.bucket={{ veleroConfig.AZURE_STORAGE_ACCOUNT_CONTAINER }} --set configuration.backupStorageLocation.config.resourceGroup={{ veleroConfig.AZURE_RESOURCE_GROUP }} --set configuration.backupStorageLocation.config.storageAccount={{ veleroConfig.AZURE_STORAGE_ACCOUNT }} --set snapshotsEnable=false > {{ veleroTempDir }}/velero.yaml'
+      tags:
+        - velero
+
+    - name: Install velero CRDs
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply -f "{{ veleroTempDir }}/velero/crds/"'
+      when: configuration.velero.state == "present"
+      register: veleroCrdResult
+      retries: 5
+      delay: 5
+      until: veleroCrdResult is succeeded
+      tags:
+        - velero
+
+    - name: Install velero
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.velero.namespace }} apply -f "{{ veleroTempDir }}/velero.yaml"'
+      when: configuration.velero.state == "present"
+      register: veleroManifestResult
+      retries: 5
+      delay: 5
+      until: veleroManifestResult is succeeded
+      tags:
+        - velero
+
+    - name: Create secret for velero to Azure
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "present"
+        namespace: "{{ configuration.velero.namespace }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: velero
+          type: Opaque
+          data: "{{ veleroSecretConfiguration }}"
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Restart velero deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.velero.namespace }} rollout restart deployment {{ configuration.velero.helmChartName }}'
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Configure daily full backups
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "present"
+        namespace: "{{ configuration.velero.namespace }}"
+        definition:
+          apiVersion: velero.io/v1
+          kind: Schedule
+          metadata:
+            name: daily-full-backups
+            labels:
+              frequency: daily
+              full: "true"
+          spec:
+            schedule: "0 2 * * *"
+            template:
+              ttl: 960h0m0s
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Configure hourly minimal backups
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "present"
+        namespace: "{{ configuration.velero.namespace }}"
+        definition:
+          apiVersion: velero.io/v1
+          kind: Schedule
+          metadata:
+            name: hourly-minimal-backups
+            labels:
+              frequency: hourly
+              full: "false"
+          spec:
+            schedule: "15 */1 * * *"
+            template:
+              snapshotVolumes: false
+              ttl: 960h0m0s
+      when: configuration.velero.state == "present"
+      tags:
+        - velero
+
+    - name: Remove velero
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace=kube-system delete --ignore-not-found=true -f "{{ veleroTempDir }}/velero.yaml"'
+      when: configuration.velero.state == "absent"
+      tags:
+        - velero
+
+    - name: Remove velero namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.velero.namespace }}"
+      when: configuration.velero.state == "absent"
+      tags:
+        - velero
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ veleroTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - velero
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ veleroTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - velero
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - velero

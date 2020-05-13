@@ -1,0 +1,7 @@
+packaging
+ansible-lint
+openshift
+boto
+boto3
+botocore
+ansible

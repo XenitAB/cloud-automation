@@ -1,0 +1,5 @@
+location: eu-west-1
+locationShort: ew1
+commonName: eks
+environment: development
+externalDnsZone: dev.xenit.io
