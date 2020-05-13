@@ -1,0 +1,59 @@
+- name: OPA Gatekeeper - HTTPS Only - ConstraintTemplate
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: templates.gatekeeper.sh/v1beta1
+      kind: ConstraintTemplate
+      metadata:
+        name: k8shttpsonly
+      spec:
+        crd:
+          spec:
+            names:
+              kind: K8sHttpsOnly
+        targets:
+          - target: admission.k8s.gatekeeper.sh
+            rego: |
+              package k8shttpsonly
+              violation[{"msg": msg}] {
+                input.review.kind.kind == "Ingress"
+                re_match("^(extensions|networking.k8s.io)$", input.review.kind.group)
+                ingress := input.review.object
+                not https_complete(ingress)
+                msg := sprintf("Ingress must be https. tls configuration is required for %v", [ingress.metadata.name])
+              }
+              https_complete(ingress) = true {
+                ingress.spec["tls"]
+                count(ingress.spec.tls) > 0
+              }
+  when: configuration.opaGatekeeper.state == "present"
+  register: opaGatekeeperHttpsOnly
+  retries: 5
+  delay: 5
+  until: opaGatekeeperHttpsOnly is succeeded
+  tags:
+    - opaGatekeeper
+
+- name: OPA Gatekeeper - HTTPS Only - Constraint - ingress-class
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: constraints.gatekeeper.sh/v1beta1
+      kind: K8sHttpsOnly
+      metadata:
+        name: ingress-https-only
+      spec:
+        enforcementAction: deny
+        match:
+          kinds:
+            - apiGroups: ["extensions", "networking.k8s.io"]
+              kinds: ["Ingress"]
+  when: configuration.opaGatekeeper.state == "present"
+  register: opaGatekeeperIngressHttpsOnly
+  retries: 5
+  delay: 5
+  until: opaGatekeeperIngressHttpsOnly is succeeded
+  tags:
+    - opaGatekeeper

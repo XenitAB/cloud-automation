@@ -1,0 +1,23 @@
+{
+    "editor.formatOnSave": true,
+    "terraform.indexing": {
+        "enabled": false,
+        "liveIndexing": false,
+        "delay": 500,
+        "exclude": [
+            ".terraform/**/*",
+            "**/.terraform/**/*"
+        ]
+    },
+    "terraform.languageServer": {
+        "enabled": true,
+        "args": []
+    },
+    "powershell.startAutomatically": false,
+    "files.associations": {
+        "**/.ci/*.yml": "azure-pipelines",
+        "**/.ci/templates/*.yml": "azure-pipelines",
+        "**/ansible/**/*.yml": "ansible",
+        "**/ansible/**/*.yaml": "ansible"
+    }
+}

@@ -1,0 +1,43 @@
+- name: Manage a k8s Role Bindings - Edit
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: present
+    definition:
+      kind: RoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1
+      metadata:
+        name: "rb-{{ item.name }}-edit"
+        namespace: "{{ item.name }}"
+      subjects:
+        - kind: Group
+          name: "{{ item.name }}-edit"
+          apiGroup: rbac.authorization.k8s.io
+      roleRef:
+        kind: ClusterRole
+        name: "edit"
+        apiGroup: rbac.authorization.k8s.io
+  loop: "{{ configuration.namespaces }}"
+  tags:
+    - k8s
+
+- name: Manage a k8s Role Bindings - View
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: present
+    definition:
+      kind: RoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1
+      metadata:
+        name: "rb-{{ item.name }}-view"
+        namespace: "{{ item.name }}"
+      subjects:
+        - kind: Group
+          name: "{{ item.name }}-view"
+          apiGroup: rbac.authorization.k8s.io
+      roleRef:
+        kind: ClusterRole
+        name: "view"
+        apiGroup: rbac.authorization.k8s.io
+  loop: "{{ configuration.namespaces }}"
+  tags:
+    - k8s

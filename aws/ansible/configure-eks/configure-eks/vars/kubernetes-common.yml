@@ -1,0 +1,98 @@
+configuration:
+  k8sconfiguration:
+    dest: /tmp/eks-k8s-admin.conf
+    awsIamRole: "iam-role-eks-admin"
+  externalDns:
+    enabled: true
+    namespace: external-dns
+    labels:
+      istio-injection: disabled
+  dnsTxtRecords:
+    enabled: true
+    dmarc: "v=DMARC1; p=reject;"
+    spf: "v=spf1 -all"
+  certManager:
+    enabled: true
+    state: present
+    namespace: cert-manager
+    helmRepo: https://charts.jetstack.io
+    helmRepoName: jetstack
+    helmChartName: cert-manager
+    helmChartVersion: 0.14.1
+    crdUrl: https://raw.githubusercontent.com/jetstack/cert-manager/release-0.14/deploy/manifests/00-crds.yaml
+    crdChecksum: "sha512:ab1addfaa419061b6aa78da4d7dda69bcd7ece09e3ce91474927388decedb5110ba7782786742dfdbc66ff261c3dc8896c09d7f76d0c14637d3fda2754d24a92"
+    labels:
+      istio-injection: disabled
+  opaGatekeeper:
+    enabled: true
+    state: present
+    namespace: gatekeeper-system
+    name: gatekeeper-operator
+    gitRepo: https://github.com/open-policy-agent/gatekeeper.git
+    gitReleaseTag: v3.1.0-beta.8
+    labels:
+      istio-injection: disabled
+      gatekeeper.sh/system: "yes"
+      admission.gatekeeper.sh/ignore: no-self-managing
+      control-plane: controller-manager
+  velero:
+    enabled: true
+    state: present
+    namespace: velero
+    version: "v1.3.1"
+    awsPluginVersion: "v1.0.1"
+    awsS3Bucket: "s3-{{ environmentShort }}-{{ locationShort }}-{{ commonName}}-velero"
+    labels:
+      istio-injection: disabled
+  datadog:
+    enabled: false
+    state: present
+    namespace: datadog
+    site: datadoghq.eu
+    awsSecretName: datadog-api-key
+    labels:
+      istio-injection: disabled
+  kubeStateMetrics:
+    enabled: true
+    state: present
+    namespace: kube-system
+    name: kube-state-metrics
+    version: v1.9.5
+  nginxIngress:
+    enabled: true
+    state: present
+    namespace: nginx-ingress
+    name: nginx-ingress
+    helmChartName: nginx-ingress
+    helmChartVersion: "1.34.3"
+    labels:
+      istio-injection: disabled
+  namespaces:
+    - name: team1
+      state: present
+      labels:
+        ansible: "true"
+
+kubectl:
+  version: "1.18.0"
+  checksumLinux: "sha512:594ca3eadc7974ec4d9e4168453e36ca434812167ef8359086cd64d048df525b7bd46424e7cc9c41e65c72bda3117326ba1662d1c9d739567f10f5684fd85bee"
+  checksumMac: "sha512:803a0fed122ef6b85f7a120b5485723eaade765b7bc8306d0c0da03bd3df15d800699d15ea2270bb7797fa9ce6a81da90e730dc793ea4ed8c0149b63d26eca30"
+  bin_directory: "{{ temp_folder }}"
+  tmp_directory: "{{ temp_folder }}"
+  owner: "root"
+  group: "root"
+  arch: "amd64"
+
+helm:
+  version: "v2.16.5"
+  checksumLinux: "sha512:4d02010813eae0c0a2fb5d8a7bec0139600ac53bd0b6ef34ded44c29864cff25275c35beddcb6698ddf5af4837461ea670a25fe39da1b3df6f85f4d8005caf51"
+  checksumMac: "sha512:7d26d630f13b0ea88769fc1365a3af9c22bfff7d127193e5d4c339d323f19cb8b044ad33e3d020252dda07d872e3e8e595ddaa261a2747edb04c312c9c2ff9d6"
+  tmpDir: "{{ temp_folder }}"
+  binDir: "{{ temp_folder }}"
+
+helmv3:
+  version: "v3.1.2"
+  checksumLinux: "sha512:26e7ad6abb61d4f670b7a0696dc21b6407350cc3398f4d66eea8daefb691981989227c05f87b6d75a8d5fdccb1d664ab716c1428197a3e68d186942fb4209ed4"
+  checksumMac: "sha512:a195b087e63578726eb1635ce538c9c1686191be6c0e6f2cc877fda28d2e6d7dbc3add4c453c6eec6940de4dafdc4d8d1927630aa4f200f480dc7f0857ee66d3"
+  tmpDir: "{{ temp_folder }}"
+  binDir: "{{ temp_folder }}"

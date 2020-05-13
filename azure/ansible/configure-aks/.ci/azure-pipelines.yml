@@ -1,0 +1,20 @@
+variables:
+  - name: vmImage
+    value: "ubuntu-latest"
+  - name: devEnvEnabled
+    value: true
+  - name: qaEnvEnabled
+    value: false
+  - name: prodEnvEnabled
+    value: false
+
+name: $(Build.BuildId)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - master
+
+stages:
+  - template: templates/pipeline.yml

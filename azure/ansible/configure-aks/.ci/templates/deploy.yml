@@ -1,0 +1,42 @@
+parameters:
+  deployment: ""
+  vmImage: ""
+  environment: ""
+
+jobs:
+- deployment: ${{ parameters.deployment }}
+  condition: and(succeeded(), eq(variables['${{ parameters.environment }}EnvEnabled'], true))
+  displayName: Deploy to ${{ parameters.environment }}
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  continueOnError: false
+  environment: ${{ parameters.environment }}
+  strategy: 
+    runOnce:
+      deploy:
+        steps:
+        - checkout: self
+          displayName: Get sources
+
+        - task: UsePythonVersion@0
+          displayName: Use Python 3.7
+          inputs:
+            versionSpec: '3.7' 
+            addToPath: true
+          name: python
+            
+        - task: AzureCLI@1
+          displayName: 'Run ansible playbook'
+          inputs:
+            azureSubscription: 'azure-${{ parameters.environment }}-owner'
+            addSpnToEnvironment: true
+            scriptLocation: inlineScript
+            inlineScript: |
+              set -e
+              pip install -U pip
+              pip install -r requirements.txt 
+              ansible-playbook -i configure-aks/hosts configure-aks/configure-aks.yml -e "environmentShort=${{ parameters.environment }}" -e "ansible_python_interpreter=$(python.pythonLocation)/bin/python" --flush-cache
+          env:
+            externalDns: $(external-dns)
+            kubernetesBackup: $(kubernetes-backup)
+            datadogApiKey: $(datadog-api-key)

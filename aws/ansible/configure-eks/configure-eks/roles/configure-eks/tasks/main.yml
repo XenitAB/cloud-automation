@@ -1,0 +1,146 @@
+- name: Set python interpreter if using Azure DevOps
+  set_fact:
+    ansible_python_interpreter: "{{ adoAnsiblePythonInterpreter }}"
+  when: adoAnsiblePythonInterpreter is defined
+  tags:
+    - common
+
+- name: Create variable for temp_folder
+  set_fact:
+    temp_folder: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}/{{ lookup('env', 'USER') }}"
+
+- name: Create temporary directory
+  file:
+    path: "{{ temp_folder }}"
+    state: directory
+    mode: 0755
+  tags:
+    - common
+
+- name: Include variables for Kubernetes
+  include_vars: "kubernetes-{{ environmentShort }}.yml"
+  tags:
+    - common
+
+- name: Include variables for Kubernetes - common
+  include_vars: "kubernetes-common.yml"
+  tags:
+    - common
+
+- name: Get AWS caller info
+  aws_caller_info:
+  register: awsCallerInfo
+  tags:
+    - common
+
+- name: Get EKS Admin role
+  iam_role_info:
+    name: "{{ configuration.k8sconfiguration.awsIamRole }}"
+  register: awsIamRoleEksAdmin
+  tags:
+    - common
+
+- name: Create kubeconfig for EKS
+  shell: aws eks --region {{ location }} update-kubeconfig --name eks-{{ environmentShort }}-{{ locationShort }}-{{ commonName }} --kubeconfig {{ configuration.k8sconfiguration.dest }} --role-arn {{ awsIamRoleEksAdmin.iam_roles[0].arn }}
+  args:
+    creates: configuration.k8sconfiguration.dest
+  tags:
+    - common
+
+- name: Run playbook
+  block:
+    - name: Include kubectl.yml
+      include_tasks: kubectl.yml
+      tags:
+        - kubectl
+
+    - name: Include helm.yml
+      include_tasks: helm.yml
+      tags:
+        - helm
+
+    - name: Include helmv3.yml
+      include_tasks: helmv3.yml
+      tags:
+        - helmv3
+
+    - name: Include aws/aws.yml
+      include_tasks: aws/aws.yml
+      tags:
+        - aws
+
+    - name: Include k8s/k8s.yml
+      include_tasks: k8s/k8s.yml
+      tags:
+        - k8s
+
+    - name: Include externalDns.yml
+      include_tasks: externalDns.yml
+      when: configuration.externalDns.enabled
+      tags:
+        - externalDns
+
+    - name: Include certManager.yml
+      include_tasks: certManager.yml
+      when: configuration.certManager.enabled
+      tags:
+        - certManager
+
+    - name: Include opaGatekeeper.yml
+      include_tasks: opaGatekeeper/opaGatekeeper.yml
+      when: configuration.opaGatekeeper.enabled
+      tags:
+        - opaGatekeeper
+
+    - name: Include velero.yml
+      include_tasks: velero.yml
+      when: configuration.velero.enabled
+      tags:
+        - velero
+
+    - name: Include datadog.yml
+      include_tasks: datadog.yml
+      when: configuration.datadog.enabled
+      tags:
+        - datadog
+
+    - name: Include kubeStateMetrics.yml
+      include_tasks: kubeStateMetrics.yml
+      when: configuration.kubeStateMetrics.enabled
+      tags:
+        - kubeStateMetrics
+
+    - name: Include dnsTxtRecords.yml
+      include_tasks: dnsTxtRecords.yml
+      when: configuration.dnsTxtRecords.enabled
+      tags:
+        - dnsTxtRecords
+
+    - name: Include nginxIngress.yml
+      include_tasks: nginxIngress.yml
+      when: configuration.nginxIngress.enabled
+      tags:
+        - nginxIngress
+
+    - name: Remove k8s configuration
+      file:
+        state: absent
+        path: "{{ configuration.k8sconfiguration.dest }}"
+      changed_when: false
+      tags:
+        - common
+
+  rescue:
+    - name: Remove k8s configuration
+      file:
+        state: absent
+        path: "{{ configuration.k8sconfiguration.dest }}"
+      changed_when: false
+      tags:
+        - common
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - common

@@ -1,0 +1,19 @@
+- name: Include ns.yml
+  include_tasks: ns.yml
+  tags:
+    - k8s
+
+- name: Include awsAuth.yml
+  include_tasks: awsAuth.yml
+  tags:
+    - k8s
+
+- name: Include k8sCrb.yml
+  include_tasks: k8sCrb.yml
+  tags:
+    - k8s
+
+- name: Include k8sRb.yml
+  include_tasks: k8sRb.yml
+  tags:
+    - k8s

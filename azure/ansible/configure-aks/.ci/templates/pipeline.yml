@@ -1,0 +1,32 @@
+stages:
+- stage: Deploy_dev
+  variables:
+  - group: tflab-keyvault-dev
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_dev
+      vmImage: $(vmImage)
+      environment: dev
+
+- stage: Deploy_qa
+  variables:
+  - group: tflab-keyvault-qa
+  dependsOn: [Deploy_dev]
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_qa
+      vmImage: $(vmImage)
+      environment: qa
+
+- stage: Deploy_prod
+  variables:
+  - group: tflab-keyvault-prod
+  dependsOn: [Deploy_qa]
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_prod
+      vmImage: $(vmImage)
+      environment: prod

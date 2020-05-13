@@ -1,0 +1,21 @@
+- name: Configure DMARC record
+  route53:
+    state: present
+    zone: "{{ externalDnsZone }}"
+    record: "_dmarc.{{ externalDnsZone }}"
+    type: TXT
+    ttl: 3600
+    value: '"{{ configuration.dnsTxtRecords.dmarc }}"'
+  tags:
+    - dnsTxtRecords
+
+- name: Configure SPF record
+  route53:
+    state: present
+    zone: "{{ externalDnsZone }}"
+    record: "{{ externalDnsZone }}"
+    type: TXT
+    ttl: 3600
+    value: '"{{ configuration.dnsTxtRecords.spf }}"'
+  tags:
+    - dnsTxtRecords

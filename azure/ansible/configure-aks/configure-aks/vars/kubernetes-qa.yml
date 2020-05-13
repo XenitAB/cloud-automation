@@ -1,0 +1,6 @@
+locationShort: we
+commonName: aks
+environment: qualityassurance
+externalDnsZone: tflab-qa.xenit.io
+ingressReplicas: 1
+citrixAdmAgentIp: 192.168.0.1

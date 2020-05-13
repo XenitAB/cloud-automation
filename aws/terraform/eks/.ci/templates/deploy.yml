@@ -1,0 +1,35 @@
+parameters:
+  deployment: ""
+  vmImage: ""
+  environment: ""
+  awsRegion: ""
+
+jobs:
+- deployment: ${{ parameters.deployment }}
+  displayName: Deploy to ${{ parameters.environment }}
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  continueOnError: false
+  environment: ${{ parameters.environment }}
+  strategy: 
+    runOnce:
+      deploy:
+        steps:
+        - checkout: self
+          displayName: Get sources
+
+        - task: DownloadPipelineArtifact@2
+          displayName: 'Download artifact'
+          inputs:
+            artifact: '${{ parameters.environment }}'
+            path: '$(System.ArtifactsDirectory)'
+
+        - task: AmazonWebServices.aws-vsts-tools.AWSShellScript.AWSShellScript@1
+          displayName: 'Deploy task'
+          inputs:
+            awsCredentials: 'aws-${{ parameters.environment }}'
+            regionName: '${{ parameters.awsRegion }}'
+            scriptType: inline
+            inlineScript: "pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName '$(tfFolderName)' -azureDevOps -deploy -tfVersion $(tfVersion) -environmentShort ${{ parameters.environment }} -artifactPath '$(System.ArtifactsDirectory)'"
+          env:
+            tfEncPassword: $(terraformEncryptionSecret)

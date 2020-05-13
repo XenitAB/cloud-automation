@@ -1,0 +1,11 @@
+{
+	"recommendations": [
+		"mauve.terraform",
+		"ms-azure-devops.azure-pipelines",
+		"tsandall.opa",
+		"ms-vscode.powershell",
+		"eamodio.gitlens",
+		"vscoss.vscode-ansible",
+		"samuelcolvin.jinjahtml"
+	]
+}

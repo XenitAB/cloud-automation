@@ -1,0 +1,56 @@
+stages:
+- stage: Build
+  jobs:
+  - template: build.yml
+    parameters:
+      jobName: Build_dev
+      vmImage: $(vmImage)
+      environment: dev
+      awsRegion: $(awsRegion)
+
+  - template: build.yml
+    parameters:
+      jobName: Build_qa
+      vmImage: $(vmImage)
+      environment: qa
+      awsRegion: $(awsRegion)
+      
+  - template: build.yml
+    parameters:
+      jobName: Build_prod
+      vmImage: $(vmImage)
+      environment: prod
+      awsRegion: $(awsRegion)
+      
+- stage: Deploy_dev
+  condition: and(and(succeeded(), eq(variables['devEnvEnabled'], true)), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: [Build]
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_dev
+      vmImage: $(vmImage)
+      environment: dev
+      awsRegion: $(awsRegion)
+
+- stage: Deploy_qa
+  condition: and(and(succeeded(), eq(variables['qaEnvEnabled'], true)), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: [Deploy_dev]
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_qa
+      vmImage: $(vmImage)
+      environment: qa
+      awsRegion: $(awsRegion)
+
+- stage: Deploy_prod
+  condition: and(and(succeeded(), eq(variables['prodEnvEnabled'], true)), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: [Deploy_qa]
+  jobs:
+  - template: deploy.yml
+    parameters:
+      deployment: Deploy_prod
+      vmImage: $(vmImage)
+      environment: prod
+      awsRegion: $(awsRegion)

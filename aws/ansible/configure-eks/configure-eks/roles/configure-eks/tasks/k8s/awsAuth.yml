@@ -1,0 +1,19 @@
+- name: Read IAM Role ARN
+  iam_role_info:
+    name: "iam-role-eks-{{ environmentShort }}-{{ locationShort }}-{{ commonName }}-nodegroup"
+  register: iamRoleArnNodeGroup
+
+- name: Manage k8s ConfigMap for aws
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: aws-auth
+        namespace: kube-system
+      data:
+        mapRoles: "{{ lookup('template', 'aws-auth-mapRoles.yaml.j2') | from_yaml | to_nice_yaml }}"
+  tags:
+    - k8s

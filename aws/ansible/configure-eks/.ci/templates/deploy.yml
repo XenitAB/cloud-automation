@@ -1,0 +1,39 @@
+parameters:
+  deployment: ""
+  vmImage: ""
+  environment: ""
+  awsRegion: ""
+
+jobs:
+- deployment: ${{ parameters.deployment }}
+  condition: and(succeeded(), eq(variables['${{ parameters.environment }}EnvEnabled'], true))
+  displayName: Deploy to ${{ parameters.environment }}
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  continueOnError: false
+  environment: ${{ parameters.environment }}
+  strategy: 
+    runOnce:
+      deploy:
+        steps:
+        - checkout: self
+          displayName: Get sources
+
+        - task: UsePythonVersion@0
+          displayName: Use Python 3.7
+          inputs:
+            versionSpec: '3.7' 
+            addToPath: true
+          name: python
+
+        - task: AmazonWebServices.aws-vsts-tools.AWSShellScript.AWSShellScript@1
+          displayName: 'Deploy task'
+          inputs:
+            awsCredentials: 'aws-${{ parameters.environment }}'
+            regionName: '${{ parameters.awsRegion }}'
+            scriptType: inline
+            inlineScript: |
+              set -e
+              pip install -U pip
+              pip install -r requirements.txt 
+              ansible-playbook -i configure-eks/hosts configure-eks/configure-eks.yml -e "environmentShort=${{ parameters.environment }}" -e "ansible_python_interpreter=$(python.pythonLocation)/bin/python" --flush-cache

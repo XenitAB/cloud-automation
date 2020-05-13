@@ -1,0 +1,13 @@
+- name: Manage k8s namespaces
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "{{ item.state }}"
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        labels: "{{ item.labels | combine({'name': item.name}) }}"
+        name: "{{ item.name }}"
+  loop: "{{ configuration.namespaces }}"
+  tags:
+    - k8s
