@@ -30,6 +30,8 @@ jobs:
             awsCredentials: 'aws-${{ parameters.environment }}'
             regionName: '${{ parameters.awsRegion }}'
             scriptType: inline
-            inlineScript: "pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName '$(tfFolderName)' -azureDevOps -deploy -tfVersion $(tfVersion) -environmentShort ${{ parameters.environment }} -artifactPath '$(System.ArtifactsDirectory)'"
+            inlineScript: |
+              cd $(workingDirectory)
+              pwsh .ci/Invoke-PipelineTask.ps1 -tfFolderName '$(tfFolderName)' -azureDevOps -deploy -tfVersion $(tfVersion) -environmentShort ${{ parameters.environment }} -artifactPath '$(System.ArtifactsDirectory)'
           env:
             tfEncPassword: $(terraformEncryptionSecret)

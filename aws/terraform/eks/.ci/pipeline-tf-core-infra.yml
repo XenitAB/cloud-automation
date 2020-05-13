@@ -1,5 +1,7 @@
 variables:
   - group: terraform-encryption
+  - name: workingDirectory
+    value: aws/terraform/eks
   - name: awsRegion
     value: "eu-north-1"
   - name: devEnvEnabled

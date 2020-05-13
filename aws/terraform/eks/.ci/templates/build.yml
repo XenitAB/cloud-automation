@@ -19,6 +19,7 @@ jobs:
       regionName: '${{ parameters.awsRegion }}'
       scriptType: inline
       inlineScript: |
+        cd $(workingDirectory)
         if [[ $opaBlastRadius == ?(-)+([0-9]) ]]; then
           blastRadius=$opaBlastRadius
         else
