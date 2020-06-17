@@ -43,7 +43,7 @@ Param(
     [Parameter(Mandatory = $false, ParameterSetName = 'destroy')]
     [Parameter(Mandatory = $true, ParameterSetName = 'import')]
     [string]$tfImportResource,
-    [string]$tfVersion = "0.12.24",
+    [string]$tfVersion = "0.12.26",
     [string]$tfPath = "$($PSScriptRoot)/../$($tfFolderName)/",
     [string]$tfEncPassword,
     [string]$environmentShort = "dev",
@@ -53,7 +53,7 @@ Param(
     [string]$tfBackendResourceGroupLocation = "West Europe",
     [string]$tfBackendResourceGroupLocationShort = "we",
     [string]$tfBackendResourceGroup = "rg-$($environmentShort)-$($tfBackendResourceGroupLocationShort)-tfstate",
-    [string]$tfBackendStorageAccountName = "strg$($environmentShort)$($tfBackendResourceGroupLocationShort)tfstate",
+    [string]$tfBackendStorageAccountName = "sa$($environmentShort)$($tfBackendResourceGroupLocationShort)tfstate",
     [string]$tfBackendStorageAccountKind = "StorageV2",
     [string]$tfBackendContainerName = "tfstate-$($tfFolderName)",
     [int]$opaBlastRadius = 50
@@ -61,6 +61,10 @@ Param(
 
 Begin {
     $ErrorActionPreference = "Stop"
+
+    $ENV:TF_VAR_REMOTE_STATE_BACKENDKEY = $tfBackendKey
+    $ENV:TF_VAR_REMOTE_STATE_RESOURCEGROUP = $tfBackendResourceGroup
+    $ENV:TF_VAR_REMOTE_STATE_STORAGEACCOUNTNAME = $tfBackendStorageAccountName
 
     # Function to retrun error code correctly from binaries
     function Invoke-Call {
@@ -149,6 +153,15 @@ Begin {
         Log-Message -message "START: Snapshot terraform state"
         Invoke-Call ([ScriptBlock]::Create("$azBin storage blob snapshot --account-name `"$($tfBackendStorageAccountName)`" --container-name `"$($tfBackendContainerName)`" --name `"$($tfBackendKey)env:$($environmentShort)`" --output json")) | ConvertFrom-Json
         Log-Message -message "END: Snapshot terraform state"
+
+        $lockStorageAccount = Invoke-Call ([ScriptBlock]::Create("az lock create --name DoNotDelete --resource-group $($tfBackendResourceGroup) --lock-type CanNotDelete --resource-type Microsoft.Storage/storageAccounts --resource $($tfBackendStorageAccountName) --output json")) | ConvertFrom-Json
+        if ($lockStorageAccount.level -eq "CanNotDelete") {
+            Log-Message -message "INFO: Configured Lock (CanNotDelete) on Storage Account $($tfBackendStorageAccountName) in Resource Group $($tfBackendResourceGroup)."
+        }
+        else {
+            Log-Message -message "ERROR: Something went wrong configuring Lock (CanNotDelete) on Storage Account $($tfBackendStorageAccountName) in Resource Group $($tfBackendResourceGroup)."
+            exit 1
+        }
     }
 
 }
@@ -256,6 +269,7 @@ Process {
                     Log-Message -message "INFO: OPA Authorization: true (score: $($opaScore) / blast_radius: $($opaBlastRadius))"
                 } else {
                     Log-Message -message "ERROR: OPA Authorization: false (score: $($opaScore) / blast_radius: $($opaBlastRadius))"
+                    Remove-Item -Force -Path "$($tfPlanFile)" | Out-Null
                     Write-Error "OPA Authorization failed."
                 }
                 Log-Message -message "END: open policy agent"

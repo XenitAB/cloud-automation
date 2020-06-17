@@ -24,7 +24,9 @@ weights = {
     "azurerm_storage_account": {"delete": 100, "create": 1, "modify": 1},
     "azurerm_virtual_network": {"delete": 100, "create": 1, "modify": 1},
     "azurerm_virtual_machine": {"delete": 100, "create": 1, "modify": 1},
-    "azuread_application_password": {"delete": 100, "create": 1, "modify": 100}
+    "azuread_application_password": {"delete": 100, "create": 1, "modify": 100},
+    "azurerm_user_assigned_identity": {"delete": 100, "create": 1, "modify": 100},
+    "helm_release": {"delete": 100, "create": 1, "modify": 1}
 }
 
 resource_types = { r | weights[r] }

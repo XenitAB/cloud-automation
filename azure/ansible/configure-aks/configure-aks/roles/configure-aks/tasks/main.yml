@@ -5,6 +5,19 @@
   tags:
     - common
 
+- name: Create variable for temp_folder
+  set_fact:
+    temp_folder: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}/{{ lookup('env', 'USER') }}"
+  tags:
+    - common
+
+- name: Creates temp_folder if it doesn't exists
+  file:
+    path: "{{ temp_folder }}"
+    state: directory
+  tags:
+    - common
+
 - name: Include variables for Kubernetes
   include_vars: "kubernetes-{{ environmentShort }}.yml"
   tags:
@@ -17,7 +30,7 @@
 
 - name: Set playbook facts
   set_fact:
-    resourceGroupName: "rg-{{ environmentShort }}-{{ locationShort }}-{{ commonName }}"
+    resourceGroupName: "rg-{{ environmentShort }}-{{ locationShort }}-{{ aksCommonName }}"
   tags:
     - common
 
@@ -54,6 +67,11 @@
       tags:
         - helm
 
+    - name: Include helmv3.yml
+      include_tasks: helmv3.yml
+      tags:
+        - helmv3
+
     - name: Include externalDns.yml
       include_tasks: externalDns.yml
       when: configuration.externalDns.enabled
@@ -71,6 +89,18 @@
       when: configuration.opaGatekeeper.enabled
       tags:
         - opaGatekeeper
+
+    - name: Include dhkeyOperator.yml
+      include_tasks: dhkeyOperator.yml
+      when: configuration.dhkeyOperator.enabled
+      tags:
+        - dhkeyOperator
+
+    - name: Include citrixAdmAgent.yml
+      include_tasks: citrixAdmAgent.yml
+      when: configuration.citrixAdmAgent.enabled
+      tags:
+        - citrixAdmAgent
 
     - name: Include citrixCpx.yml
       include_tasks: citrixCpx.yml
@@ -90,23 +120,17 @@
       tags:
         - datadog
 
-    - name: Include kubeStateMetrics.yml
-      include_tasks: kubeStateMetrics.yml
-      when: configuration.kubeStateMetrics.enabled
-      tags:
-        - kubeStateMetrics
-
     - name: Include dnsTxtRecords.yml
       include_tasks: dnsTxtRecords.yml
       when: configuration.dnsTxtRecords.enabled
       tags:
         - dnsTxtRecords
 
-    - name: Include nginxIngress.yml
-      include_tasks: nginxIngress.yml
-      when: configuration.nginxIngress.enabled
+    - name: Include ingressNginx.yml
+      include_tasks: ingressNginx.yml
+      when: configuration.ingressNginx.enabled
       tags:
-        - nginxIngress
+        - ingressNginx
 
     - name: Remove k8s configuration
       file:

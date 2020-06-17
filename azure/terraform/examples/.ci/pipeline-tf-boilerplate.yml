@@ -8,10 +8,8 @@ variables:
     value: false
   - name: prodEnvEnabled
     value: false
-  - name: azureSubscription
-    value: "azureRm"
   - name: tfVersion
-    value: "0.12.24"
+    value: "0.12.26"
   - name: vmImage
     value: "ubuntu-latest"
   - name: tfFolderName
@@ -21,6 +19,15 @@ name: $(Build.BuildId)
 
 trigger:
   batch: true
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - azure/terraform/examples/tf-boilerplate
+
+# In Azure DevOps this doesn't work yet - you need to add it using branch policies: https://docs.microsoft.com/en-us/azure/devops/repos/git/branch-policies?view=azure-devops#build-validation
+pr:
   branches:
     include:
       - master

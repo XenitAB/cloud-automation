@@ -11,7 +11,7 @@
         crd:
           spec:
             names:
-              kind: K8sRequiredAnnotations
+              kind: k8srequiredannotations
             validation:
               openAPIV3Schema:
                 properties:
@@ -56,19 +56,19 @@
               }
   when: configuration.opaGatekeeper.state == "present"
   register: opaGatekeeperRequiredAnnotations
-  retries: 5
+  retries: 20
   delay: 5
   until: opaGatekeeperRequiredAnnotations is succeeded
   tags:
     - opaGatekeeper
 
-- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-class
+- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-insecure-termination
   k8s:
     kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
     state: "present"
     definition:
       apiVersion: constraints.gatekeeper.sh/v1beta1
-      kind: K8sRequiredAnnotations
+      kind: k8srequiredannotations
       metadata:
         name: ingress-insecure-termination
       spec:
@@ -84,19 +84,19 @@
               allowedRegex: "^redirect$"
   when: configuration.opaGatekeeper.state == "present"
   register: opaGatekeeperInsecureTermination
-  retries: 5
+  retries: 20
   delay: 5
   until: opaGatekeeperInsecureTermination is succeeded
   tags:
     - opaGatekeeper
 
-- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-insecure-termination
+- name: OPA Gatekeeper - Required Annotations - Constraint - ingress-class
   k8s:
     kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
     state: "present"
     definition:
       apiVersion: constraints.gatekeeper.sh/v1beta1
-      kind: K8sRequiredAnnotations
+      kind: k8srequiredannotations
       metadata:
         name: ingress-class
       spec:
@@ -112,7 +112,7 @@
               allowedRegex: "^citrix-ingress$"
   when: configuration.opaGatekeeper.state == "present"
   register: opaGatekeeperIngressClass
-  retries: 5
+  retries: 20
   delay: 5
   until: opaGatekeeperIngressClass is succeeded
   tags:

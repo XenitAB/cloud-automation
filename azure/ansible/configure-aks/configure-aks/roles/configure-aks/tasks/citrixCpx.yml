@@ -1,23 +1,11 @@
 - name: Set fact for citrixCpx tempdir
   set_fact:
     citrixCpxTempDir: "/tmp/citrixCpx-{{ ansible_date_time.iso8601_basic_short }}"
+    citrixAdmAgentHost: "{{ configuration.citrixAdmAgent.helmChartName }}"
   tags:
     - citrixCpx
 
-- name: Add citrixCpx namespace
-  k8s:
-    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-    state: "{{ configuration.citrixCpx.state }}"
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ configuration.citrixCpx.namespace }}"
-        labels: "{{ configuration.citrixCpx.labels | combine({'name': configuration.citrixCpx.namespace}) }}"
-  tags:
-    - citrixCpx
-
-- name: Copy templates and apply
+- name: Download and apply helm template
   block:
     - name: Create citrixCpx temp dir
       file:
@@ -28,11 +16,82 @@
       tags:
         - citrixCpx
 
-    - name: Copy citrixCpx manifest jinja2 templates
-      template:
-        src: "citrixCpx.yaml.j2"
-        dest: "{{ citrixCpxTempDir }}/citrixCpx.yaml"
-      changed_when: false
+    - name: Add citrixCpx namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.citrixCpx.namespace }}"
+            labels: "{{ configuration.citrixCpx.labels | combine({'name': configuration.citrixCpx.namespace}) }}"
+      when: configuration.citrixCpx.state == "present"
+      tags:
+        - citrixCpx
+
+    - name: Create dhkey for citrix-cpx
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "{{ configuration.citrixCpx.state }}"
+        namespace: "{{ configuration.citrixCpx.namespace }}"
+        definition:
+          apiVersion: xenit.io/v1alpha1
+          kind: DHKey
+          metadata:
+            name: citrix-cpx-dhkey
+          spec:
+            key_size: 4096
+      tags:
+        - citrixCpx
+
+    - name: Wait for dhkey secret to be created
+      k8s_info:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        api_version: v1
+        kind: Secret
+        namespace: "{{ configuration.citrixCpx.namespace }}"
+        name: citrix-cpx-dhkey
+      register: registerDhkeySecret
+      retries: 30
+      delay: 30
+      until: registerDhkeySecret.resources != []
+      tags:
+        - citrixCpx
+
+    - name: Create wildcard certificate for citrix-cpx
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "{{ configuration.citrixCpx.state }}"
+        namespace: "{{ configuration.citrixCpx.namespace }}"
+        definition:
+          apiVersion: cert-manager.io/v1alpha2
+          kind: Certificate
+          metadata:
+            name: cpx-ingress-cert
+          spec:
+            dnsNames:
+            - "*.{{ externalDnsZone }}"
+            issuerRef:
+              kind: ClusterIssuer
+              name: letsencrypt-prod
+            secretName: cpx-ingress-cert
+      tags:
+        - citrixCpx
+
+    - name: Wait for certificate to be created
+      k8s_info:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        api_version: cert-manager.io/v1alpha3
+        kind: Certificate
+        namespace: "{{ configuration.citrixCpx.namespace }}"
+        name: cpx-ingress-cert
+      register: registerCpxCert
+      retries: 30
+      delay: 30
+      until:
+        - registerCpxCert.resources != []
+        - registerCpxCert.resources[0].status.conditions[0].status == "True"
       tags:
         - citrixCpx
 
@@ -45,9 +104,12 @@
           apiVersion: v1
           kind: ConfigMap
           metadata:
-            name: cpx-configurations
+            name: "{{ configuration.citrixCpx.configmapCpxConfName }}"
           data:
             cpx.conf: |
+              #Shell Commands
+              bash /etc/customscripts/fix_licenseserver.sh
+              
               #NetScaler Commands
               set ssl param -defaultProfile ENABLED
 
@@ -59,12 +121,12 @@
               bind ssl cipher cpx-ciphers -cipherName TLS1.2-DHE-RSA-AES256-GCM-SHA384 -cipherPriority 5
               bind ssl cipher cpx-ciphers -cipherName TLS1.2-DHE-RSA-AES128-GCM-SHA256 -cipherPriority 6
 
-              set ssl profile ns_default_ssl_profile_frontend -dhCount 1000 -dh ENABLED -dhFile /cpxsecret/dhkey -denySSLReneg NONSECURE -snienable ENABLED -HSTS ENABLED -maxage 157680000 -IncludeSubdomain no -tls1 DISABLED -tls11 DISABLED
+              set ssl profile ns_default_ssl_profile_frontend -dhCount 1000 -dh ENABLED -dhFile /cpxsecret/dhKey -denySSLReneg NONSECURE -snienable DISABLED -HSTS ENABLED -maxage 157680000 -IncludeSubdomain no -tls1 DISABLED -tls11 DISABLED
               unbind ssl profile ns_default_ssl_profile_frontend -cipherName FlushAllCiphers
               bind ssl profile ns_default_ssl_profile_frontend -cipherName cpx-ciphers -cipherPriority 1
 
               add rewrite action rwa-add-xff insert_http_header X-Forwarded-For client.ip.src
-              add rewrite action rwa-replace-xff replace "HTTP.REQ.HEADER(\"X-Forwarded-For\")" "HTTP.REQ.HEADER(\"X-Forwarded-For\").APPEND(\",\").APPEND(CLIENT.IP.SRC)"
+              add rewrite action rwa-replace-xff replace "HTTP.REQ.HEADER(\"X-Forwarded-For\")" client.ip.src
               add rewrite action rwa-add-xfp_http insert_http_header X-Forwarded-Proto "\"http\""
               add rewrite action rwa-replace-xfp_http replace "HTTP.REQ.HEADER(\"X-Forwarded-Proto\")" "\"http\""
               add rewrite action rwa-add-xfp_https insert_http_header X-Forwarded-Proto "\"https\""
@@ -87,83 +149,75 @@
       tags:
         - citrixCpx
 
-    - name: Get CPX Secret
-      k8s_info:
-        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-        api_version: v1
-        kind: Secret
-        namespace: "{{ configuration.citrixCpx.namespace }}"
-        label_selectors:
-          - app = cpx-ingress
-          - type = dhkey
-      register: cpxDhSecret
+    - name: Copy citrixCpx-values.yaml.j2 manifest jinja2 templates
+      template:
+        src: "citrixCpx-values.yaml.j2"
+        dest: "{{ citrixCpxTempDir }}/citrixCpx-values.yaml"
+      changed_when: false
       tags:
         - citrixCpx
 
-    - name: Generate Citrix CPX DH Key
-      openssl_dhparam:
-        path: "{{ citrixCpxTempDir }}/dhparams.pem"
-        size: 2048
-      when: cpxDhSecret.resources == []
+    - name: Helm repo add citrix-helm-charts
+      shell: "{{ helm.binDir }}/helmv3 repo add citrix-helm-charts https://xenitab.github.io/citrix-helm-charts/"
       tags:
         - citrixCpx
 
-    - name: Create k8s secret for cpx-ingress
-      k8s:
-        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-        state: "{{ configuration.citrixCpx.state }}"
-        namespace: "{{ configuration.citrixCpx.namespace }}"
-        definition:
-          apiVersion: v1
-          kind: Secret
-          type: Opaque
-          metadata:
-            name: cpx-ingress
-            labels:
-              app: cpx-ingress
-              type: dhkey
-          data:
-            dhkey: "{{lookup('file', citrixCpxTempDir + '/dhparams.pem') | b64encode }}"
-      when: cpxDhSecret.resources == []
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
       tags:
         - citrixCpx
 
-    - name: Apply citrixCpx manifest
-      k8s:
-        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-        state: "{{ configuration.citrixCpx.state }}"
-        src: "{{ citrixCpxTempDir }}/citrixCpx.yaml"
-        namespace: "{{ configuration.citrixCpx.namespace }}"
+    - name: Install citrixCpx
+      shell: '{{ helm.binDir }}/helmv3 -f {{ citrixCpxTempDir }}/citrixCpx-values.yaml --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --wait --install --version {{ configuration.citrixCpx.helmChartVersion }} --namespace {{ configuration.citrixCpx.namespace }} {{ configuration.citrixCpx.helmChartName }} citrix-helm-charts/citrix-cpx-with-ingress-controller'
+      register: citrixCpxInstallResult
+      when: configuration.citrixCpx.state == "present"
       tags:
         - citrixCpx
 
     - name: Restart citrixCpx deployment
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.citrixCpx.namespace }} rollout restart deployment cpx-ingress'
-      when:
-        - configuration.citrixCpx.state == "present"
-        - cpxConfigResult.changed
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.citrixCpx.namespace }} rollout restart deployment {{ configuration.citrixCpx.helmChartName }}'
+      when: configuration.citrixCpx.state == "present"
       tags:
         - citrixCpx
 
-    - name: Delete citrixCpx temp dir
+    - name: Remove citrixCpx
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.citrixCpx.namespace }} uninstall {{ configuration.citrixCpx.helmChartName }}'
+      when: configuration.citrixCpx.state == "absent"
+      tags:
+        - citrixCpx
+
+    - name: Remove citrixCpx namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.citrixCpx.namespace }}"
+      when: configuration.citrixCpx.state == "absent"
+      tags:
+        - citrixCpx
+
+    - name: Delete temporary local folder
       file:
-        path: "{{ citrixCpxTempDir }}"
+        path: "{{ citrixCpxTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - citrixCpx
 
   rescue:
-    - name: Delete citrixCpx temp dir
+    - name: Delete temporary local folder
       file:
-        path: "{{ citrixCpxTempDir }}"
+        path: "{{ citrixCpxTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - citrixCpx
 
-    - name: Fail
+    - name: Fail task
       fail:
-        msg: "Rescue was invoked, failing task."
+        msg: "Rescue was invoked, task failed."
       tags:
         - citrixCpx

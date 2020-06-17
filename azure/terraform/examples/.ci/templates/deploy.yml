@@ -2,11 +2,9 @@ parameters:
   deployment: ""
   vmImage: ""
   environment: ""
-  azureSubscription: ""
 
 jobs:
 - deployment: ${{ parameters.deployment }}
-  condition: and(succeeded(), eq(variables['${{ parameters.environment }}EnvEnabled'], true))
   displayName: Deploy to ${{ parameters.environment }}
   pool:
     vmImage: ${{ parameters.vmImage }}
@@ -28,7 +26,7 @@ jobs:
         - task: AzureCLI@1
           displayName: 'Deploy task'
           inputs:
-            azureSubscription: '${{ parameters.azureSubscription }}'
+            azureSubscription: 'azure-aks-${{ parameters.environment }}-owner'
             addSpnToEnvironment: true
             scriptLocation: inlineScript
             inlineScript: |

@@ -33,7 +33,7 @@
         - opaGatekeeper
 
     - name: Generate kubernetes manifest for opaGatekeeper
-      shell: '{{ helm.binDir }}/helm template "{{ opaGatekeeperTempDir }}/gatekeeper/chart/gatekeeper-operator" --name {{ configuration.opaGatekeeper.name }} --namespace {{ configuration.opaGatekeeper.namespace }} > {{ opaGatekeeperTempDir }}/opaGatekeeper.yaml'
+      shell: '{{ helm.binDir }}/helm template "{{ opaGatekeeperTempDir }}/gatekeeper/charts/gatekeeper" --name {{ configuration.opaGatekeeper.name }} --namespace {{ configuration.opaGatekeeper.namespace }} > {{ opaGatekeeperTempDir }}/opaGatekeeper.yaml'
       tags:
         - opaGatekeeper
 

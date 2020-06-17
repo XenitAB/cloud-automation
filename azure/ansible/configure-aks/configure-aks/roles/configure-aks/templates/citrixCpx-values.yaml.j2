@@ -1,0 +1,38 @@
+replicas: {{ ingressReplicas }}
+lsIP: "{{ citrixAdmAgentHost }}"
+lsPort: "{{ configuration.citrixCpx.lsPort }}"
+platform: "{{ configuration.citrixCpx.cpxPlatform }}"
+license:
+  accept: yes
+ingressClass:
+  - citrix-ingress
+defaultSSLCert: cpx-ingress-cert
+
+cpxConfig:
+  configmap:
+    useExisting: true
+    mount: true
+    name: {{ configuration.citrixCpx.configmapCpxConfName }}
+  scriptConfigmap:
+    useExisting: false            # Should an existing configmap be used?
+    mount: true                   # Should the configmap be mounted?
+    name: cpx-scripts             # Name of the configmap containing the scripts
+    mountPath: /etc/customscripts # Path where to mount the scripts
+  dhkeySecret:
+    useExisting: true
+    mount: true
+    secretName: citrix-cpx-dhkey
+    dhkeyName: dhKey
+  loginCredentials:
+    useExisting: false           # Should an existing secret be used?
+    mount: true                  # Should the secret be mounted into NS_USER and NS_PASSWORD for cic and exported?
+    secretName: cpx-credentials  # The existing secrets name or the secret that should be created
+    username: nsroot           # Username for the netscaler
+    password: nsroot           # Password for the netscaler
+
+service:
+  externalTrafficPolicy: Local
+  type: LoadBalancer
+  sessionAffinity: ClientIP
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ commonName }}.{{ externalDnsZone }}

@@ -1,0 +1,86 @@
+- name: Set fact for ingressNginx tempdir
+  set_fact:
+    ingressNginxTempDir: "/tmp/ingressNginx-{{ ansible_date_time.iso8601_basic_short }}"
+  tags:
+    - ingressNginx
+
+- name: Download and apply helm template
+  block:
+    - name: Add ingressNginx namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.ingressNginx.namespace }}"
+            labels: "{{ configuration.ingressNginx.labels | combine({'name': configuration.ingressNginx.namespace}) }}"
+      when: configuration.ingressNginx.state == "present"
+      tags:
+        - ingressNginx
+
+    - name: Helm repo add ingress-nginx
+      shell: "{{ helm.binDir }}/helmv3 repo add ingress-nginx https://kubernetes.github.io/ingress-nginx"
+      tags:
+        - ingressNginx
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
+      tags:
+        - ingressNginx
+
+    - name: Install ingressNginx
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --install --version {{ configuration.ingressNginx.helmChartVersion }} --namespace {{ configuration.ingressNginx.namespace }} --set controller.publishService.enabled=true --set-string controller.config.use-forwarded-headers="true" {{ configuration.ingressNginx.helmChartName }} ingress-nginx/ingress-nginx'
+      register: ingressNginxInstallResult
+      when: configuration.ingressNginx.state == "present"
+      tags:
+        - ingressNginx
+
+    - name: Restart ingressNginx deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.ingressNginx.namespace }} rollout restart deployment ingress-nginx-controller'
+      when: configuration.ingressNginx.state == "present"
+      tags:
+        - ingressNginx
+
+    - name: Remove ingressNginx
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.ingressNginx.namespace }} uninstall {{ configuration.ingressNginx.helmChartName }}'
+      when: configuration.ingressNginx.state == "absent"
+      tags:
+        - ingressNginx
+
+    - name: Remove ingressNginx namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.ingressNginx.namespace }}"
+      when: configuration.ingressNginx.state == "absent"
+      tags:
+        - ingressNginx
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ ingressNginxTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - ingressNginx
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ ingressNginxTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - ingressNginx
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - ingressNginx

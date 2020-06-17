@@ -1,0 +1,99 @@
+- name: Set fact for dhkeyOperator tempdir
+  set_fact:
+    dhkeyOperatorTempDir: "/tmp/dhkeyOperator-{{ ansible_date_time.iso8601_basic_short }}"
+  tags:
+    - dhkeyOperator
+
+- name: Download and apply helm template
+  block:
+    - name: Create dhkeyOperator temp dir
+      file:
+        path: "{{ dhkeyOperatorTempDir }}"
+        state: directory
+        mode: 0755
+      changed_when: false
+      tags:
+        - dhkeyOperator
+
+    - name: Add dhkeyOperator namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.dhkeyOperator.namespace }}"
+            labels: "{{ configuration.dhkeyOperator.labels | combine({'name': configuration.dhkeyOperator.namespace}) }}"
+      when: configuration.dhkeyOperator.state == "present"
+      register: dhkeyOperatorNamespace
+      retries: 20
+      delay: 5
+      until: dhkeyOperatorNamespace is succeeded
+      tags:
+        - dhkeyOperator
+
+    - name: Helm repo add dhkey-operator
+      shell: "{{ helm.binDir }}/helmv3 repo add dhkey-operator https://xenitab.github.io/dhkey-operator/"
+      tags:
+        - dhkeyOperator
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
+      tags:
+        - dhkeyOperator
+
+    - name: Install dhkeyOperator
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --wait --install --version {{ configuration.dhkeyOperator.helmChartVersion }} --namespace {{ configuration.dhkeyOperator.namespace }} {{ configuration.dhkeyOperator.helmChartName }} dhkey-operator/dhkey-operator'
+      register: dhkeyOperatorInstallResult
+      when: configuration.dhkeyOperator.state == "present"
+      tags:
+        - dhkeyOperator
+
+    - name: Restart dhkeyOperator deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.dhkeyOperator.namespace }} rollout restart deployment {{ configuration.dhkeyOperator.helmChartName }}'
+      when: configuration.dhkeyOperator.state == "present"
+      tags:
+        - dhkeyOperator
+
+    - name: Remove dhkeyOperator
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.dhkeyOperator.namespace }} uninstall {{ configuration.dhkeyOperator.helmChartName }}'
+      when: configuration.dhkeyOperator.state == "absent"
+      tags:
+        - dhkeyOperator
+
+    - name: Remove dhkeyOperator namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.dhkeyOperator.namespace }}"
+      when: configuration.dhkeyOperator.state == "absent"
+      tags:
+        - dhkeyOperator
+
+    - name: Delete temporary local folder
+      file:
+        path: "{{ dhkeyOperatorTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - dhkeyOperator
+
+  rescue:
+    - name: Delete temporary local folder
+      file:
+        path: "{{ dhkeyOperatorTempDir }}/"
+        state: absent
+      changed_when: false
+      tags:
+        - dhkeyOperator
+
+    - name: Fail task
+      fail:
+        msg: "Rescue was invoked, task failed."
+      tags:
+        - dhkeyOperator

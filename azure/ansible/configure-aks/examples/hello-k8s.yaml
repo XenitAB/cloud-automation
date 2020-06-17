@@ -38,15 +38,13 @@ kind: Ingress
 metadata:
   name: hello-k8s-ingress
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    kubernetes.io/ingress.class: "citrix-ingress"
+    ingress.citrix.com/insecure-termination: "redirect"
 spec:
   tls:
-    - hosts:
-        - hello-k8s.tflab-dev.xenit.io
-      secretName: hello-k8s
+    - {}
   rules:
-    - host: hello-k8s.tflab-dev.xenit.io
+    - host: aks1.tflab-dev.xenit.io # hello-k8s.tflab-dev.xenit.io
       http:
         paths:
           - path: /

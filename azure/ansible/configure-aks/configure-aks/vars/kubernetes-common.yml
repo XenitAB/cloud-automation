@@ -1,10 +1,14 @@
 configuration:
+  coreResourceGroupName: core
   k8sconfiguration:
     src: /etc/kubernetes/admin.conf
     dest: /tmp/k8s-admin.conf
   externalDns:
-    enabled: true
+    enabled: enabled
+    state: present
     namespace: external-dns
+    helmChartName: external-dns
+    helmChartVersion: 3.1.1
     labels:
       istio-injection: disabled
   dnsTxtRecords:
@@ -15,67 +19,74 @@ configuration:
     enabled: true
     state: present
     namespace: cert-manager
-    helmRepo: https://charts.jetstack.io
-    helmRepoName: jetstack
     helmChartName: cert-manager
-    helmChartVersion: 0.14.1
-    crdUrl: https://raw.githubusercontent.com/jetstack/cert-manager/release-0.14/deploy/manifests/00-crds.yaml
-    crdChecksum: "sha512:ab1addfaa419061b6aa78da4d7dda69bcd7ece09e3ce91474927388decedb5110ba7782786742dfdbc66ff261c3dc8896c09d7f76d0c14637d3fda2754d24a92"
+    helmChartVersion: v0.15.0
+    letsEncryptEnabled: true
+    internalCaEnabled: false
     labels:
       istio-injection: disabled
   opaGatekeeper:
-    enabled: false
+    enabled: true
     state: present
     namespace: gatekeeper-system
     name: gatekeeper-operator
     gitRepo: https://github.com/open-policy-agent/gatekeeper.git
-    gitReleaseTag: v3.1.0-beta.8
+    gitReleaseTag: v3.1.0-beta.9
     labels:
       istio-injection: disabled
       gatekeeper.sh/system: "yes"
       admission.gatekeeper.sh/ignore: no-self-managing
       control-plane: controller-manager
-  citrixCpx:
-    enabled: false
+  citrixAdmAgent:
+    enabled: true
     state: present
-    cpxImage: "quay.io/citrix/citrix-k8s-cpx-ingress"
-    cpxImageVersion: "13.0-47.103"
-    cicImage: "quay.io/citrix/citrix-k8s-ingress-controller"
-    cicImageVersion: "1.6.1"
-    namespace: citrix-cpx
-    admIpAddress: "{{ citrixAdmAgentIp }}"
-    admPort: 27000
-    cpxBandwidth: 1000
+    namespace: cpx-ingress
+    helmChartName: citrix-adm-agent
+    helmChartVersion: 13.0-61.39
+    labels:
+      istio-injection: disabled
+  citrixCpx:
+    enabled: true
+    state: present
+    namespace: cpx-ingress
+    helmChartName: cpx-ingress
+    helmChartVersion: 1.8.19-10
+    configmapCpxConfName: cpx-configuration
+    lsPort: "27000"
+    cpxPlatform: "CP1000"
     labels:
       istio-injection: disabled
   velero:
     enabled: true
     state: present
     namespace: velero
-    helmChartName: velero
-    helmChartVersion: 2.7.4
+    version: "v1.4.0"
+    azurePluginVersion: "v1.1.0"
     labels:
       istio-injection: disabled
   datadog:
-    enabled: false
+    enabled: enabled
     state: present
     namespace: datadog
-    site: datadoghq.eu
+    helmChartName: datadog-agent
+    helmChartVersion: 2.3.5
     labels:
       istio-injection: disabled
-  kubeStateMetrics:
-    enabled: true
+  dhkeyOperator:
+    enabled: enabled
     state: present
-    namespace: kube-system
-    name: kube-state-metrics
-    version: v1.9.5
-  nginxIngress:
-    enabled: true
+    namespace: dhkey-operator
+    helmChartName: dhkey-operator
+    helmChartVersion: 0.0.4
+    labels:
+      istio-injection: disabled
+  ingressNginx:
+    enabled: false
     state: present
-    namespace: nginx-ingress
-    name: nginx-ingress
-    helmChartName: nginx-ingress
-    helmChartVersion: "1.34.3"
+    namespace: ingress-nginx
+    name: ingress-nginx
+    helmChartName: ingress-nginx
+    helmChartVersion: "2.3.0"
     labels:
       istio-injection: disabled
 
@@ -83,8 +94,8 @@ kubectl:
   version: "1.18.0"
   checksumLinux: "sha512:594ca3eadc7974ec4d9e4168453e36ca434812167ef8359086cd64d048df525b7bd46424e7cc9c41e65c72bda3117326ba1662d1c9d739567f10f5684fd85bee"
   checksumMac: "sha512:803a0fed122ef6b85f7a120b5485723eaade765b7bc8306d0c0da03bd3df15d800699d15ea2270bb7797fa9ce6a81da90e730dc793ea4ed8c0149b63d26eca30"
-  bin_directory: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}"
-  tmp_directory: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}"
+  bin_directory: "{{ temp_folder }}"
+  tmp_directory: "{{ temp_folder }}"
   owner: "root"
   group: "root"
   arch: "amd64"
@@ -93,5 +104,12 @@ helm:
   version: "v2.16.5"
   checksumLinux: "sha512:4d02010813eae0c0a2fb5d8a7bec0139600ac53bd0b6ef34ded44c29864cff25275c35beddcb6698ddf5af4837461ea670a25fe39da1b3df6f85f4d8005caf51"
   checksumMac: "sha512:7d26d630f13b0ea88769fc1365a3af9c22bfff7d127193e5d4c339d323f19cb8b044ad33e3d020252dda07d872e3e8e595ddaa261a2747edb04c312c9c2ff9d6"
-  tmpDir: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}"
-  binDir: "{{lookup('env', 'TMPDIR') | default('/tmp', true)}}"
+  tmpDir: "{{ temp_folder }}"
+  binDir: "{{ temp_folder }}"
+
+helmv3:
+  version: "v3.1.2"
+  checksumLinux: "sha512:26e7ad6abb61d4f670b7a0696dc21b6407350cc3398f4d66eea8daefb691981989227c05f87b6d75a8d5fdccb1d664ab716c1428197a3e68d186942fb4209ed4"
+  checksumMac: "sha512:a195b087e63578726eb1635ce538c9c1686191be6c0e6f2cc877fda28d2e6d7dbc3add4c453c6eec6940de4dafdc4d8d1927630aa4f200f480dc7f0857ee66d3"
+  tmpDir: "{{ temp_folder }}"
+  binDir: "{{ temp_folder }}"

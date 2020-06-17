@@ -1,23 +1,46 @@
+data "azuread_service_principal" "ownerSpn" {
+  display_name = var.ownerServicePrincipalName
+}
+
 resource "azuread_application" "aadApp" {
-  for_each = { for rg in var.rgConfig : rg.commonName => rg }
-  name     = "sp-rg-${var.commonName}-${var.environmentShort}-${each.value.commonName}-contributor"
+  for_each = {
+    for rg in var.rgConfig :
+    rg.commonName => rg
+    if rg.delegateSp == true
+  }
+
+  name = "${local.spNamePrefix}${local.groupNameSeparator}rg${local.groupNameSeparator}${var.subscriptionCommonName}${local.groupNameSeparator}${var.environmentShort}${local.groupNameSeparator}${each.value.commonName}${local.groupNameSeparator}contributor"
 }
 
 resource "azuread_service_principal" "aadSp" {
-  for_each       = { for rg in var.rgConfig : rg.commonName => rg }
+  for_each = {
+    for rg in var.rgConfig :
+    rg.commonName => rg
+    if rg.delegateSp == true
+  }
+
   application_id = azuread_application.aadApp[each.key].application_id
 }
 
 resource "azurerm_role_assignment" "roleAssignmentSp" {
-  for_each             = { for rg in var.rgConfig : rg.commonName => rg }
-  scope                = azurerm_resource_group.rg[each.key].id
+  for_each = {
+    for envResource in local.envResources :
+    envResource.name => envResource
+    if envResource.rgConfig.delegateSp == true
+  }
+
+  scope                = azurerm_resource_group.rg[each.value.name].id
   role_definition_name = "Contributor"
-  principal_id         = azuread_service_principal.aadSp[each.key].object_id
+  principal_id         = azuread_service_principal.aadSp[each.value.rgConfig.commonName].object_id
 }
 
 resource "random_password" "aadSpSecret" {
-  for_each         = { for rg in var.rgConfig : rg.commonName => rg }
-  length           = 24
+  for_each = {
+    for rg in var.rgConfig :
+    rg.commonName => rg
+    if rg.delegateSp == true
+  }
+  length           = 48
   special          = true
   override_special = "!-_="
 
@@ -27,7 +50,11 @@ resource "random_password" "aadSpSecret" {
 }
 
 resource "azuread_application_password" "aadSpSecret" {
-  for_each              = { for rg in var.rgConfig : rg.commonName => rg }
+  for_each = {
+    for rg in var.rgConfig :
+    rg.commonName => rg
+    if rg.delegateSp == true
+  }
   application_object_id = azuread_application.aadApp[each.key].id
   value                 = random_password.aadSpSecret[each.key].result
   end_date              = timeadd(timestamp(), "87600h") # 10 years
@@ -40,17 +67,24 @@ resource "azuread_application_password" "aadSpSecret" {
 }
 
 resource "azurerm_key_vault_secret" "aadSpKvSecret" {
-  for_each = { for rg in var.rgConfig : rg.commonName => rg }
-  name     = replace(azuread_service_principal.aadSp[each.key].display_name, ".", "-")
+  for_each = {
+    for envResourceCoreRg in setproduct(var.rgConfig, local.coreRgs) : "${envResourceCoreRg[1]}-${envResourceCoreRg[0].commonName}" => {
+      rgConfig = envResourceCoreRg[0]
+      coreRg   = envResourceCoreRg[1]
+    }
+    if envResourceCoreRg[0].delegateSp == true
+  }
+
+  name = replace(azuread_service_principal.aadSp[each.value.rgConfig.commonName].display_name, ".", "-")
   value = jsonencode({
     tenantId       = data.azurerm_subscription.current.tenant_id
     subscriptionId = data.azurerm_subscription.current.subscription_id
-    clientId       = azuread_service_principal.aadSp[each.key].application_id
-    clientSecret   = random_password.aadSpSecret[each.key].result
+    clientId       = azuread_service_principal.aadSp[each.value.rgConfig.commonName].application_id
+    clientSecret   = random_password.aadSpSecret[each.value.rgConfig.commonName].result
   })
-  key_vault_id = azurerm_key_vault.delegateKv[var.coreCommonName].id
+  key_vault_id = azurerm_key_vault.delegateKv[each.value.coreRg].id
 
   depends_on = [
-    azurerm_key_vault_access_policy.delegateKvApCurSpn
+    azurerm_key_vault_access_policy.delegateKvApOwnerSpn
   ]
 }

@@ -1,0 +1,28 @@
+sources:
+  # - crd
+  - service
+  - ingress
+
+provider: azure
+azure:
+  resourceGroup: "{{ ((externalDnsSecret.stdout | from_json).value | b64decode | from_json).resourceGroup }}"
+  tenantId: "{{ ((externalDnsSecret.stdout | from_json).value | b64decode | from_json).tenantId }}"
+  subscriptionId: "{{ ((externalDnsSecret.stdout | from_json).value | b64decode | from_json).subscriptionId }}"
+  aadClientId: "{{ ((externalDnsSecret.stdout | from_json).value | b64decode | from_json).aadClientId }}"
+  aadClientSecret: "{{ ((externalDnsSecret.stdout | from_json).value | b64decode | from_json).aadClientSecret }}"
+  useManagedIdentityExtension: false
+
+logLevel: info
+logFormat: json
+policy: sync
+registry: "txt"
+txtOwnerId: "{{ aksCommonName }}-{{ commonName }}-{{ environmentShort }}"
+replicas: 1
+
+crd:
+  create: false
+
+metrics:
+  enabled: false
+  serviceMonitor:
+    enabled: false

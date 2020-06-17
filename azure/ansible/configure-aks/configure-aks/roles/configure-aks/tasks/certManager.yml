@@ -4,9 +4,19 @@
   tags:
     - certManager
 
+- name: Get external-dns secret from KeyVault
+  shell: "az keyvault secret show --vault kv-{{ environmentShort }}-{{ locationShort }}-{{ configuration.coreResourceGroupName }} --name dns-secret --output json"
+  register: certManagerSecret
+  when:
+    - configuration.certManager.letsEncryptEnabled
+  tags:
+    - certManager
+
 - name: Set Azure facts for certManager
   set_fact:
-    cmAzure: "{{ lookup('env', 'externalDns') | b64decode | from_json }}"
+    cmAzure: "{{ (certManagerSecret.stdout | from_json).value | b64decode | from_json }}"
+  when:
+    - configuration.certManager.letsEncryptEnabled
   tags:
     - certManager
 
@@ -25,12 +35,23 @@
             flags: 0
             value: letsencrypt.org
         TTL: 3600
-  when: configuration.certManager.state == "present"
+  when:
+    - configuration.certManager.letsEncryptEnabled
+    - configuration.certManager.state == "present"
   tags:
     - certManager
 
 - name: Download and apply helm template
   block:
+    - name: Create certManager temp dir
+      file:
+        path: "{{ certManagerTempDir }}"
+        state: directory
+        mode: 0755
+      changed_when: false
+      tags:
+        - certManager
+
     - name: Add certManager namespace
       k8s:
         kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
@@ -45,67 +66,39 @@
       tags:
         - certManager
 
-    - name: Helm init
-      shell: "{{ helm.binDir }}/helm init --client-only"
-      tags:
-        - certManager
-
-    - name: Helm repo add
-      shell: "{{ helm.binDir }}/helm repo add {{ configuration.certManager.helmRepoName }} {{ configuration.certManager.helmRepo }}"
+    - name: Helm repo add jetstack
+      shell: "{{ helm.binDir }}/helmv3 repo add jetstack https://charts.jetstack.io"
       tags:
         - certManager
 
     - name: Helm repo update
-      shell: "{{ helm.binDir }}/helm repo update"
+      shell: "{{ helm.binDir }}/helmv3 repo update"
       tags:
         - certManager
 
-    - name: Fetch helm chart for certManager
-      shell: "{{ helm.binDir }}/helm fetch --untar --untardir {{ certManagerTempDir }} --version {{ configuration.certManager.helmChartVersion }} {{ configuration.certManager.helmRepoName }}/{{ configuration.certManager.helmChartName }}"
-      tags:
-        - certManager
-
-    - name: Download certManager CRDs
-      get_url:
-        url: "{{ configuration.certManager.crdUrl }}"
-        checksum: "{{ configuration.certManager.crdChecksum }}"
-        dest: "{{ certManagerTempDir }}/crds.yaml"
-      tags:
-        - certManager
-
-    - name: Generate kubernetes manifest for certManager
-      shell: '{{ helm.binDir }}/helm template "{{ certManagerTempDir }}/{{ configuration.certManager.helmChartName }}" --name {{ configuration.certManager.helmChartName }} --namespace {{ configuration.certManager.namespace }} > {{ certManagerTempDir }}/certManager.yaml'
-      tags:
-        - certManager
-
-    - name: Install certManager CRDs
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply --validate=false -f "{{ certManagerTempDir }}/crds.yaml"'
-      when: configuration.certManager.state == "present"
-      register: certManagerCrdManifestResult
-      retries: 5
-      delay: 5
-      until: certManagerCrdManifestResult is succeeded
+    - name: Copy certManager-values.yaml.j2 manifest jinja2 templates
+      template:
+        src: "certManager-values.yaml.j2"
+        dest: "{{ certManagerTempDir }}/certManager-values.yaml"
+      changed_when: false
       tags:
         - certManager
 
     - name: Install certManager
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" apply -f "{{ certManagerTempDir }}/certManager.yaml"'
+      shell: '{{ helm.binDir }}/helmv3 -f {{ certManagerTempDir }}/certManager-values.yaml --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --wait --install --version {{ configuration.certManager.helmChartVersion }} --namespace {{ configuration.certManager.namespace }} {{ configuration.certManager.helmChartName }} jetstack/cert-manager'
+      register: certManagerInstallResult
       when: configuration.certManager.state == "present"
-      register: certManagerManifestResult
-      retries: 5
-      delay: 5
-      until: certManagerManifestResult is succeeded
+      tags:
+        - certManager
+
+    - name: Restart certManager deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.certManager.namespace }} rollout restart deployment {{ configuration.certManager.helmChartName }}'
+      when: configuration.certManager.state == "present"
       tags:
         - certManager
 
     - name: Remove certManager
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" delete --ignore-not-found=true -f "{{ certManagerTempDir }}/certManager.yaml"'
-      when: configuration.certManager.state == "absent"
-      tags:
-        - certManager
-
-    - name: Remove certManager CRDs
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" delete --ignore-not-found=true -f "{{ certManagerTempDir }}/crds.yaml"'
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.certManager.namespace }} uninstall {{ configuration.certManager.helmChartName }}'
       when: configuration.certManager.state == "absent"
       tags:
         - certManager
@@ -159,11 +152,13 @@
       type: Opaque
       data:
         CLIENT_SECRET: "{{ cmAzure.aadClientSecret | b64encode }}"
-  when: configuration.certManager.state == "present"
+  when:
+    - configuration.certManager.letsEncryptEnabled
+    - configuration.certManager.state == "present"
   tags:
     - certManager
 
-- name: Add cert-manager issuer
+- name: Add cert-manager cluster issuer - letsencrypt-prod
   k8s:
     kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
     state: "present"
@@ -189,7 +184,83 @@
                   tenantID: "{{ cmAzure.tenantId }}"
                   resourceGroupName: "{{ cmAzure.resourceGroup }}"
                   hostedZoneName: "{{ externalDnsZone }}"
-  when: configuration.certManager.state == "present"
+  when:
+    - configuration.certManager.letsEncryptEnabled
+    - configuration.certManager.state == "present"
+  register: certManagerIssuerResult
+  retries: 20
+  delay: 30
+  until: certManagerIssuerResult is succeeded
+  tags:
+    - certManager
+
+
+- name: Add cert-manager cluster issuer - selfsigning-issuer
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    definition:
+      apiVersion: cert-manager.io/v1alpha2
+      kind: ClusterIssuer
+      metadata:
+        name: selfsigning-issuer
+      spec:
+        selfSigned: {}
+  when:
+    - configuration.certManager.internalCaEnabled
+    - configuration.certManager.state == "present"
+  register: certManagerIssuerResult
+  retries: 20
+  delay: 30
+  until: certManagerIssuerResult is succeeded
+  tags:
+    - certManager
+
+- name: Add root ca certificate for internal-root-ca
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    namespace: "{{ configuration.certManager.namespace }}"
+    definition:
+      apiVersion: cert-manager.io/v1alpha2
+      kind: Certificate
+      metadata:
+        name: internal-root-ca
+      spec:
+        secretName: internal-root-ca
+        commonName: "Internal Root CA"
+        duration: 219000h # 9125d / 25y
+        keyAlgorithm: ecdsa
+        isCA: true
+        issuerRef:
+          name: selfsigning-issuer
+          kind: ClusterIssuer
+  when:
+    - configuration.certManager.internalCaEnabled
+    - configuration.certManager.state == "present"
+  register: certManagerIssuerResult
+  retries: 20
+  delay: 30
+  until: certManagerIssuerResult is succeeded
+  tags:
+    - certManager
+
+- name: Add ClusterIssuer for root ca certificate (internal-root-ca)
+  k8s:
+    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+    state: "present"
+    namespace: "{{ configuration.certManager.namespace }}"
+    definition:
+      apiVersion: cert-manager.io/v1alpha2
+      kind: ClusterIssuer
+      metadata:
+        name: internal-root-ca
+      spec:
+        ca:
+          secretName: "internal-root-ca"
+  when:
+    - configuration.certManager.internalCaEnabled
+    - configuration.certManager.state == "present"
   register: certManagerIssuerResult
   retries: 20
   delay: 30

@@ -6,24 +6,21 @@ stages:
       jobName: Build_dev
       vmImage: $(vmImage)
       environment: dev
-      azureSubscription: $(azureSubscription)
-    
-
+      
   - template: build.yml
     parameters:
       jobName: Build_qa
       vmImage: $(vmImage)
       environment: qa
-      azureSubscription: $(azureSubscription)
-      
+
   - template: build.yml
     parameters:
       jobName: Build_prod
       vmImage: $(vmImage)
       environment: prod
-      azureSubscription: $(azureSubscription)
-      
+
 - stage: Deploy_dev
+  condition: and(succeeded(), eq(variables['devEnvEnabled'], true), ne(variables['Build.Reason'], 'PullRequest'))
   dependsOn: [Build]
   jobs:
   - template: deploy.yml
@@ -31,24 +28,23 @@ stages:
       deployment: Deploy_dev
       vmImage: $(vmImage)
       environment: dev
-      azureSubscription: $(azureSubscription)
 
 - stage: Deploy_qa
-  dependsOn: [Build, Deploy_dev]
+  condition: and(succeeded(), eq(variables['qaEnvEnabled'], true), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: [Deploy_dev]
   jobs:
   - template: deploy.yml
     parameters:
       deployment: Deploy_qa
       vmImage: $(vmImage)
       environment: qa
-      azureSubscription: $(azureSubscription)
 
 - stage: Deploy_prod
-  dependsOn: [Build, Deploy_qa]
+  condition: and(succeeded(), eq(variables['prodEnvEnabled'], true), ne(variables['Build.Reason'], 'PullRequest'))
+  dependsOn: [Deploy_qa]
   jobs:
   - template: deploy.yml
     parameters:
       deployment: Deploy_prod
       vmImage: $(vmImage)
       environment: prod
-      azureSubscription: $(azureSubscription)

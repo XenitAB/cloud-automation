@@ -4,36 +4,19 @@
   tags:
     - externalDns
 
-- name: Add external-dns namespace
-  k8s:
-    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ configuration.externalDns.namespace }}"
-        labels: "{{ configuration.externalDns.labels | combine({'name': configuration.externalDns.namespace}) }}"
+- name: Get dns-secret secret from KeyVault
+  shell: "az keyvault secret show --vault kv-{{ environmentShort }}-{{ locationShort }}-{{ configuration.coreResourceGroupName }} --name dns-secret --output json"
+  register: externalDnsSecret
   tags:
     - externalDns
 
-- name: Create secret for external-dns to Azure
-  k8s:
-    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-    state: "present"
-    namespace: "{{ configuration.externalDns.namespace }}"
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: azure-config-file
-      type: Opaque
-      data:
-        azure.json: "{{ lookup('env', 'externalDns') }}"
+- name: Set facts for externalDns-api-key
+  set_fact:
+    externalDnsApiKey: "{{ (externalDnsSecret.stdout | from_json).value }}"
   tags:
     - externalDns
 
-- name: Copy templates and apply
+- name: Download and apply helm template
   block:
     - name: Create externalDns temp dir
       file:
@@ -44,41 +27,89 @@
       tags:
         - externalDns
 
-    - name: Copy external-dns manifest jinja2 templates
+    - name: Add externalDns namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.externalDns.namespace }}"
+            labels: "{{ configuration.externalDns.labels | combine({'name': configuration.externalDns.namespace}) }}"
+      when: configuration.externalDns.state == "present"
+      tags:
+        - externalDns
+
+    - name: Copy externalDns-values.yaml.j2 manifest jinja2 templates
       template:
-        src: "external-dns.yaml.j2"
-        dest: "{{ externalDnsTempDir }}/external-dns.yaml"
+        src: "externalDns-values.yaml.j2"
+        dest: "{{ externalDnsTempDir }}/externalDns-values.yaml"
       changed_when: false
       tags:
         - externalDns
 
-    - name: Apply external-dns manifest
-      k8s:
-        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-        state: "present"
-        src: "{{ externalDnsTempDir }}/external-dns.yaml"
+    - name: Helm repo add bitnami
+      shell: "{{ helm.binDir }}/helmv3 repo add bitnami https://charts.bitnami.com/bitnami"
       tags:
         - externalDns
 
-    - name: Delete externalDns temp dir
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
+      tags:
+        - externalDns
+
+    - name: Install externalDns
+      shell: '{{ helm.binDir }}/helmv3 -f {{ externalDnsTempDir }}/externalDns-values.yaml --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --wait --install --version {{ configuration.externalDns.helmChartVersion }} --namespace {{ configuration.externalDns.namespace }} {{ configuration.externalDns.helmChartName }} bitnami/external-dns'
+      register: externalDnsInstallResult
+      when: configuration.externalDns.state == "present"
+      tags:
+        - externalDns
+
+    - name: Restart externalDns deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.externalDns.namespace }} delete pods -l app={{ configuration.externalDns.helmChartName }}'
+      when: configuration.externalDns.state == "present"
+      tags:
+        - externalDns
+
+    - name: Remove externalDns
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.externalDns.namespace }} uninstall {{ configuration.externalDns.helmChartName }}'
+      when: configuration.externalDns.state == "absent"
+      tags:
+        - externalDns
+
+    - name: Remove externalDns namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.externalDns.namespace }}"
+      when: configuration.externalDns.state == "absent"
+      tags:
+        - externalDns
+
+    - name: Delete temporary local folder
       file:
-        path: "{{ externalDnsTempDir }}"
+        path: "{{ externalDnsTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - externalDns
 
   rescue:
-    - name: Delete externalDns temp dir
+    - name: Delete temporary local folder
       file:
-        path: "{{ externalDnsTempDir }}"
+        path: "{{ externalDnsTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - externalDns
 
-    - name: Fail
+    - name: Fail task
       fail:
-        msg: "Rescue was invoked, failing task."
+        msg: "Rescue was invoked, task failed."
       tags:
         - externalDns
