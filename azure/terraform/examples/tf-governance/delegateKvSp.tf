@@ -5,7 +5,7 @@ resource "azuread_application" "delegateKvAadApp" {
     if rg.delegateKv == true
   }
 
-  name = "sp-rg-${var.commonName}-${var.environmentShort}-${each.value.commonName}-kvreader"
+  name = "${local.spNamePrefix}${local.groupNameSeparator}rg${local.groupNameSeparator}${var.subscriptionCommonName}${local.groupNameSeparator}${var.environmentShort}${local.groupNameSeparator}${each.key}${local.groupNameSeparator}kvreader"
 }
 
 resource "azuread_service_principal" "delegateKvAadSp" {
@@ -25,7 +25,7 @@ resource "random_password" "delegateKvAadSpSecret" {
     if rg.delegateKv == true
   }
 
-  length           = 24
+  length           = 48
   special          = true
   override_special = "!-_="
 
@@ -52,53 +52,25 @@ resource "azuread_application_password" "delegateKvAadSpSecret" {
   }
 }
 
-resource "azurerm_key_vault_secret" "delegateKvAadSpKvSecretClientId" {
+resource "azurerm_key_vault_secret" "delegateKvAadSpKvSecret" {
   for_each = {
-    for rg in var.rgConfig :
-    rg.commonName => rg
-    if rg.delegateKv == true
+    for envResource in local.envResources :
+    envResource.name => envResource
+    if envResource.rgConfig.delegateKv == true
   }
 
-  name         = "keyvault-credentials-clientid"
-  value        = azuread_service_principal.delegateKvAadSp[each.key].application_id
-  key_vault_id = azurerm_key_vault.delegateKv[each.key].id
+  name = replace(azuread_service_principal.delegateKvAadSp[each.value.rgConfig.commonName].display_name, ".", "-")
+  value = jsonencode({
+    tenantId       = data.azurerm_subscription.current.tenant_id
+    subscriptionId = data.azurerm_subscription.current.subscription_id
+    clientId       = azuread_service_principal.delegateKvAadSp[each.value.rgConfig.commonName].application_id
+    clientSecret   = random_password.delegateKvAadSpSecret[each.value.rgConfig.commonName].result
+    keyVaultName   = azurerm_key_vault.delegateKv[each.value.name].name
+  })
+  key_vault_id = azurerm_key_vault.delegateKv[each.value.name].id
 
   depends_on = [
     azurerm_key_vault_access_policy.delegateKvApKvreaderSp,
-    azurerm_key_vault_access_policy.delegateKvApCurSpn
-  ]
-}
-
-resource "azurerm_key_vault_secret" "delegateKvAadSpKvSecretClientSecret" {
-  for_each = {
-    for rg in var.rgConfig :
-    rg.commonName => rg
-    if rg.delegateKv == true
-  }
-
-  name         = "keyvault-credentials-clientsecret"
-  value        = random_password.delegateKvAadSpSecret[each.key].result
-  key_vault_id = azurerm_key_vault.delegateKv[each.key].id
-
-  depends_on = [
-    azurerm_key_vault_access_policy.delegateKvApKvreaderSp,
-    azurerm_key_vault_access_policy.delegateKvApCurSpn
-  ]
-}
-
-resource "azurerm_key_vault_secret" "delegateKvAadSpKvSecretKeyVaultName" {
-  for_each = {
-    for rg in var.rgConfig :
-    rg.commonName => rg
-    if rg.delegateKv == true
-  }
-
-  name         = "keyvault-credentials-keyvaultname"
-  value        = "kv-${var.environmentShort}-${var.locationShort}-${each.key}"
-  key_vault_id = azurerm_key_vault.delegateKv[each.key].id
-
-  depends_on = [
-    azurerm_key_vault_access_policy.delegateKvApKvreaderSp,
-    azurerm_key_vault_access_policy.delegateKvApCurSpn
+    azurerm_key_vault_access_policy.delegateKvApOwnerSpn
   ]
 }

@@ -5,12 +5,12 @@ terraform {
 
 # Configure the Azure Provider
 provider "azurerm" {
-  version = "=2.3.0"
+  version = "=2.14.0"
   features {}
 }
 
 provider "azuread" {
-  version = "=0.8.0"
+  version = "=0.10.0"
 }
 
 data "azurerm_subscription" "current" {}

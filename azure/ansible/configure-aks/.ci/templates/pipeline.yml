@@ -1,7 +1,5 @@
 stages:
 - stage: Deploy_dev
-  variables:
-  - group: tflab-keyvault-dev
   jobs:
   - template: deploy.yml
     parameters:
@@ -10,8 +8,6 @@ stages:
       environment: dev
 
 - stage: Deploy_qa
-  variables:
-  - group: tflab-keyvault-qa
   dependsOn: [Deploy_dev]
   jobs:
   - template: deploy.yml
@@ -21,8 +17,6 @@ stages:
       environment: qa
 
 - stage: Deploy_prod
-  variables:
-  - group: tflab-keyvault-prod
   dependsOn: [Deploy_qa]
   jobs:
   - template: deploy.yml

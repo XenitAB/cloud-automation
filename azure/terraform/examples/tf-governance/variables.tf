@@ -1,11 +1,9 @@
-variable "location" {
-  description = "The Azure region to create things in."
-  type        = string
-}
-
-variable "locationShort" {
-  description = "The Azure region short name."
-  type        = string
+variable "regions" {
+  description = "The Azure Regions to configure"
+  type = list(object({
+    location      = string
+    locationShort = string
+  }))
 }
 
 variable "environmentShort" {
@@ -13,8 +11,8 @@ variable "environmentShort" {
   type        = string
 }
 
-variable "commonName" {
-  description = "The commonName to use in names"
+variable "subscriptionCommonName" {
+  description = "The commonName for the subscription"
   type        = string
 }
 
@@ -31,6 +29,7 @@ variable "rgConfig" {
       delegateAks = bool # Delegate aks permissions 
       delegateKv  = bool # Delegate KeyVault creation
       delegateSe  = bool # Delegate Service Endpoint permissions
+      delegateSp  = bool # Delegate Service Principal
       tags        = map(string)
     })
   )
@@ -42,4 +41,9 @@ variable "kvDefaultPermissions" {
     key_permissions    = list(string)
     secret_permissions = list(string)
   })
+}
+
+variable "ownerServicePrincipalName" {
+  description = "The name of the service principal that will be used to run terraform and is owner of the subsciptions"
+  type        = string
 }

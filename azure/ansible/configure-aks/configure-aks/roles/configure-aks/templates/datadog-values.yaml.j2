@@ -1,0 +1,28 @@
+datadog:
+  apiKeyExistingSecret: datadog-api-key
+  clusterName: {{ aksCommonName }}-{{ environmentShort }}
+  site: datadoghq.eu
+  kubeStateMetricsEnabled: true
+  clusterChecks:
+    enabled: true
+  tags:
+    - "kubernetesEnvironment:{{ environmentShort }}"
+    - "Env:{{ environmentShort }}"
+  collectEvents: true
+  leaderElection: true
+  logs:
+    enabled: true
+    containerCollectAll: true
+  apm:
+    enabled: true
+  systemProbe:
+    enabled: true
+  env:
+    - name: DD_KUBELET_TLS_VERIFY
+      value: "false"
+  processAgent:
+    enabled: true
+    processCollection: true
+
+clusterAgent:
+  enabled: true

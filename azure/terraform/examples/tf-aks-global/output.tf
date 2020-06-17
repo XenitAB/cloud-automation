@@ -1,0 +1,21 @@
+output "aadGroups" {
+  value = {
+    aadGroupView         = azuread_group.aadGroupView
+    aadGroupEdit         = azuread_group.aadGroupEdit
+    aadGroupClusterAdmin = azuread_group.aadGroupClusterAdmin
+    aadGroupClusterView  = azuread_group.aadGroupClusterView
+  }
+}
+
+output "aadPodIdentity" {
+  value = azurerm_user_assigned_identity.userAssignedIdentityNs
+}
+
+output "acr" {
+  value = azurerm_container_registry.acr
+}
+
+output "k8sNamespaces" {
+  value = var.k8sNamespaces
+}
+

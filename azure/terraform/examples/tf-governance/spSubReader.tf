@@ -1,5 +1,5 @@
 resource "azuread_application" "aadSubReaderApp" {
-  name = "sp-sub-${var.commonName}-${var.environmentShort}-reader"
+  name = "${local.spNamePrefix}${local.groupNameSeparator}sub${local.groupNameSeparator}${var.subscriptionCommonName}${local.groupNameSeparator}${var.environmentShort}${local.groupNameSeparator}reader"
 }
 
 resource "azuread_service_principal" "aadSubReaderSp" {
@@ -13,7 +13,7 @@ resource "azurerm_role_assignment" "roleAssignmentSubReaderSp" {
 }
 
 resource "random_password" "aadSubReaderSpSecret" {
-  length           = 24
+  length           = 48
   special          = true
   override_special = "!-_="
 
@@ -35,6 +35,11 @@ resource "azuread_application_password" "aadSubReaderSpSecret" {
 }
 
 resource "azurerm_key_vault_secret" "aadSubReaderSpKvSecret" {
+  for_each = {
+    for coreRg in local.coreRgs :
+    coreRg => coreRg
+  }
+
   name = replace(azuread_service_principal.aadSubReaderSp.display_name, ".", "-")
   value = jsonencode({
     tenantId       = data.azurerm_subscription.current.tenant_id
@@ -42,9 +47,9 @@ resource "azurerm_key_vault_secret" "aadSubReaderSpKvSecret" {
     clientId       = azuread_service_principal.aadSubReaderSp.application_id
     clientSecret   = random_password.aadSubReaderSpSecret.result
   })
-  key_vault_id = azurerm_key_vault.delegateKv[var.coreCommonName].id
+  key_vault_id = azurerm_key_vault.delegateKv[each.key].id
 
   depends_on = [
-    azurerm_key_vault_access_policy.delegateKvApCurSpn
+    azurerm_key_vault_access_policy.delegateKvApOwnerSpn
   ]
 }

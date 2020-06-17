@@ -11,7 +11,7 @@
         crd:
           spec:
             names:
-              kind: K8sHttpsOnly
+              kind: k8shttpsonly
         targets:
           - target: admission.k8s.gatekeeper.sh
             rego: |
@@ -29,7 +29,7 @@
               }
   when: configuration.opaGatekeeper.state == "present"
   register: opaGatekeeperHttpsOnly
-  retries: 5
+  retries: 20
   delay: 5
   until: opaGatekeeperHttpsOnly is succeeded
   tags:
@@ -41,7 +41,7 @@
     state: "present"
     definition:
       apiVersion: constraints.gatekeeper.sh/v1beta1
-      kind: K8sHttpsOnly
+      kind: k8shttpsonly
       metadata:
         name: ingress-https-only
       spec:
@@ -52,7 +52,7 @@
               kinds: ["Ingress"]
   when: configuration.opaGatekeeper.state == "present"
   register: opaGatekeeperIngressHttpsOnly
-  retries: 5
+  retries: 20
   delay: 5
   until: opaGatekeeperIngressHttpsOnly is succeeded
   tags:

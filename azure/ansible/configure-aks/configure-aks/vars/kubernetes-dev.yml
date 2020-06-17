@@ -1,6 +1,6 @@
 locationShort: we
-commonName: aks
+commonName: aks1
+aksCommonName: aks
 environment: development
 externalDnsZone: tflab-dev.xenit.io
 ingressReplicas: 1
-citrixAdmAgentIp: 192.168.0.1

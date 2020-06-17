@@ -4,20 +4,19 @@
   tags:
     - datadog
 
-- name: Add datadog namespace
-  k8s:
-    kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ configuration.datadog.namespace }}"
-        labels: "{{ configuration.datadog.labels | combine({'name': configuration.datadog.namespace}) }}"
+- name: Get datadog-api-key secret from KeyVault
+  shell: "az keyvault secret show --vault kv-{{ environmentShort }}-{{ locationShort }}-{{ configuration.coreResourceGroupName }} --name datadog-api-key --output json"
+  register: datadogSecret
   tags:
     - datadog
 
-- name: Copy templates and apply
+- name: Set facts for datadog-api-key
+  set_fact:
+    datadogApiKey: "{{ (datadogSecret.stdout | from_json).value }}"
+  tags:
+    - datadog
+
+- name: Download and apply helm template
   block:
     - name: Create datadog temp dir
       file:
@@ -28,48 +27,106 @@
       tags:
         - datadog
 
-    - name: Copy datadog manifest jinja2 templates
-      template:
-        src: "datadog.yaml.j2"
-        dest: "{{ datadogTempDir }}/datadog.yaml"
-      changed_when: false
-      tags:
-        - datadog
-
-    - name: Apply datadog manifest
+    - name: Add datadog namespace
       k8s:
         kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
-        state: "{{ configuration.datadog.state }}"
-        src: "{{ datadogTempDir }}/datadog.yaml"
-        namespace: "{{ configuration.datadog.namespace }}"
-      tags:
-        - datadog
-
-    - name: Restart datadog pods
-      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.datadog.namespace }} delete pod -l app=datadog-agent'
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.datadog.namespace }}"
+            labels: "{{ configuration.datadog.labels | combine({'name': configuration.datadog.namespace}) }}"
       when: configuration.datadog.state == "present"
       tags:
         - datadog
 
-    - name: Delete datadog temp dir
+    - name: Create secret for datadog-api-key
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: "present"
+        namespace: "{{ configuration.datadog.namespace }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: datadog-api-key
+          type: Opaque
+          data:
+            api-key: "{{ datadogApiKey | b64encode }}"
+      when: configuration.datadog.state == "present"
+      tags:
+        - datadog
+
+    - name: Copy datadog-values.yaml.j2 manifest jinja2 templates
+      template:
+        src: "datadog-values.yaml.j2"
+        dest: "{{ datadogTempDir }}/datadog-values.yaml"
+      changed_when: false
+      tags:
+        - datadog
+
+    - name: Helm repo add stable
+      shell: "{{ helm.binDir }}/helmv3 repo add stable https://kubernetes-charts.storage.googleapis.com"
+      tags:
+        - datadog
+
+    - name: Helm repo update
+      shell: "{{ helm.binDir }}/helmv3 repo update"
+      tags:
+        - datadog
+
+    - name: Install datadog
+      shell: '{{ helm.binDir }}/helmv3 -f {{ datadogTempDir }}/datadog-values.yaml --kubeconfig="{{ configuration.k8sconfiguration.dest }}" upgrade --wait --install --version {{ configuration.datadog.helmChartVersion }} --namespace {{ configuration.datadog.namespace }} {{ configuration.datadog.helmChartName }} stable/datadog'
+      register: datadogInstallResult
+      when: configuration.datadog.state == "present"
+      tags:
+        - datadog
+
+    - name: Restart datadog deployment
+      shell: '{{ kubectl.bin_directory }}/kubectl --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace={{ configuration.datadog.namespace }} delete pods -l app={{ configuration.datadog.helmChartName }}'
+      when: configuration.datadog.state == "present"
+      tags:
+        - datadog
+
+    - name: Remove datadog
+      shell: '{{ helm.binDir }}/helmv3 --kubeconfig="{{ configuration.k8sconfiguration.dest }}" --namespace {{ configuration.datadog.namespace }} uninstall {{ configuration.datadog.helmChartName }}'
+      when: configuration.datadog.state == "absent"
+      tags:
+        - datadog
+
+    - name: Remove datadog namespace
+      k8s:
+        kubeconfig: "{{ configuration.k8sconfiguration.dest }}"
+        state: absent
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ configuration.datadog.namespace }}"
+      when: configuration.datadog.state == "absent"
+      tags:
+        - datadog
+
+    - name: Delete temporary local folder
       file:
-        path: "{{ datadogTempDir }}"
+        path: "{{ datadogTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - datadog
 
   rescue:
-    - name: Delete datadog temp dir
+    - name: Delete temporary local folder
       file:
-        path: "{{ datadogTempDir }}"
+        path: "{{ datadogTempDir }}/"
         state: absent
       changed_when: false
       tags:
         - datadog
 
-    - name: Fail
+    - name: Fail task
       fail:
-        msg: "Rescue was invoked, failing task."
+        msg: "Rescue was invoked, task failed."
       tags:
         - datadog

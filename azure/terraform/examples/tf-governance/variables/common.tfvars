@@ -1,7 +1,13 @@
-location       = "West Europe"
-locationShort  = "we"
-commonName     = "tf"
-coreCommonName = "tflab"
+regions = [
+  {
+    location      = "West Europe"
+    locationShort = "we"
+  }
+]
+
+subscriptionCommonName    = "tflab"
+coreCommonName            = "core"
+ownerServicePrincipalName = "sp-sub-tflab-all-owner"
 
 kvDefaultPermissions = {
   key_permissions = [
@@ -36,30 +42,13 @@ kvDefaultPermissions = {
 
 rgConfig = [
   {
-    commonName  = "tfstate",
-    delegateAks = false,
-    delegateKv  = false,
-    delegateSe  = false,
-    tags = {
-      "description" = "State for terraform"
-    }
-  },
-  {
-    commonName  = "tflab",
+    commonName  = "core",
     delegateAks = false,
     delegateKv  = true,
     delegateSe  = false,
+    delegateSp  = false,
     tags = {
       "description" = "Core infrastructure"
-    }
-  },
-  {
-    commonName  = "asc",
-    delegateAks = false,
-    delegateKv  = false,
-    delegateSe  = false,
-    tags = {
-      "description" = "Azure Security Center"
     }
   },
   {
@@ -67,35 +56,29 @@ rgConfig = [
     delegateAks = false,
     delegateKv  = false,
     delegateSe  = false,
+    delegateSp  = false,
     tags = {
       "description" = "Azure Kubernetes Service (AKS)"
     }
   },
   {
-    commonName  = "team1",
-    delegateAks = true,
-    delegateKv  = false,
-    delegateSe  = true,
-    tags = {
-      "description" = "Team1 resource group"
-    }
-  },
-  {
-    commonName  = "team2",
-    delegateAks = true,
-    delegateKv  = true,
-    delegateSe  = true,
-    tags = {
-      "description" = "Team2 resource group"
-    }
-  },
-  {
-    commonName  = "ctxadm",
+    commonName  = "afd",
     delegateAks = false,
     delegateKv  = false,
     delegateSe  = false,
+    delegateSp  = false,
     tags = {
-      "description" = "Citrix Application Delivery Management"
+      "description" = "AFD - Azure Front Door"
+    }
+  },
+  {
+    commonName  = "site",
+    delegateAks = true,
+    delegateKv  = true,
+    delegateSe  = true,
+    delegateSp  = true,
+    tags = {
+      "description" = "Resources for site"
     }
   }
 ]
