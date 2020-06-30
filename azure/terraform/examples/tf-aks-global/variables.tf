@@ -40,6 +40,12 @@ variable "k8sNamespaces" {
       name       = string
       delegateRg = bool
       labels     = map(string)
+      flux = object({
+        enabled      = bool
+        azdo_org     = string
+        azdo_project = string
+        azdo_repo    = string
+      })
     })
   )
 }
@@ -47,4 +53,9 @@ variable "k8sNamespaces" {
 variable "dnsZone" {
   description = "The DNS Zone to create"
   type        = string
+}
+
+variable "aksAuthorizedIps" {
+  description = "Authorized IPs to access AKS API"
+  type        = list(string)
 }

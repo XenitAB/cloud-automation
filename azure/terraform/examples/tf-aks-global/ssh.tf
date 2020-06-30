@@ -4,7 +4,7 @@ resource "tls_private_key" "sshKey" {
 }
 
 resource "azurerm_key_vault_secret" "secretSshKey" {
-  name         = "ssh-priv-tflab-${var.environmentShort}-${var.locationShort}"
+  name         = "ssh-priv-aks-${var.environmentShort}-${var.locationShort}"
   value        = jsonencode(tls_private_key.sshKey)
   key_vault_id = data.azurerm_key_vault.coreKv.id
 }

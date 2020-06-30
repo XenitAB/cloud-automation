@@ -1,10 +1,11 @@
 resource "azurerm_kubernetes_cluster" "aks" {
-  name                = "aks-${var.environmentShort}-${var.locationShort}-${var.commonName}"
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
-  dns_prefix          = "aks-${var.environmentShort}-${var.locationShort}-${var.commonName}"
-  kubernetes_version  = var.aksConfiguration.kubernetes_version
-  sku_tier            = var.aksConfiguration.sku_tier
+  name                            = "aks-${var.environmentShort}-${var.locationShort}-${var.commonName}"
+  location                        = data.azurerm_resource_group.rg.location
+  resource_group_name             = data.azurerm_resource_group.rg.name
+  dns_prefix                      = "aks-${var.environmentShort}-${var.locationShort}-${var.commonName}"
+  kubernetes_version              = var.aksConfiguration.kubernetes_version
+  sku_tier                        = var.aksConfiguration.sku_tier
+  api_server_authorized_ip_ranges = local.aksAuthorizedIps
 
   auto_scaler_profile {
     balance_similar_node_groups      = false
@@ -41,6 +42,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
     network_plugin    = "kubenet"
     network_policy    = "calico"
     load_balancer_sku = "standard"
+    load_balancer_profile {
+      outbound_ip_prefix_ids = [
+        local.aksPipPrefixId
+      ]
+    }
   }
 
   service_principal {

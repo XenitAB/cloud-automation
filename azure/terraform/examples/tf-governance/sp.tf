@@ -66,6 +66,19 @@ resource "azuread_application_password" "aadSpSecret" {
   }
 }
 
+resource "pal_management_partner" "rg_service_principal" {
+  for_each = {
+    for rg in var.rgConfig :
+    rg.commonName => rg
+    if rg.delegateSp == true
+  }
+
+  tenant_id     = data.azurerm_client_config.current.tenant_id
+  client_id     = azuread_service_principal.aadSp[each.key].application_id
+  client_secret = random_password.aadSpSecret[each.key].result
+  partner_id    = var.partner_id
+}
+
 resource "azurerm_key_vault_secret" "aadSpKvSecret" {
   for_each = {
     for envResourceCoreRg in setproduct(var.rgConfig, local.coreRgs) : "${envResourceCoreRg[1]}-${envResourceCoreRg[0].commonName}" => {

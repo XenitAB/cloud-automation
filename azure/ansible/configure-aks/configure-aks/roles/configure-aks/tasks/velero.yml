@@ -23,6 +23,10 @@
             name: "{{ configuration.velero.namespace }}"
             labels: "{{ configuration.velero.labels | combine({'name': configuration.velero.namespace}) }}"
       when: configuration.velero.state == "present"
+      register: veleroNamespace
+      retries: 20
+      delay: 5
+      until: veleroNamespace is succeeded
       tags:
         - velero
 

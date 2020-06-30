@@ -4,8 +4,9 @@ metadata:
   name: hello-k8s
 spec:
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 80
+      name: http
+      targetPort: http
   selector:
     app: hello-k8s
 ---
@@ -29,6 +30,7 @@ spec:
           image: paulbouwer/hello-kubernetes:1.7
           ports:
             - containerPort: 8080
+              name: http
           env:
             - name: MESSAGE
               value: Welcome to a POD!
@@ -50,4 +52,4 @@ spec:
           - path: /
             backend:
               serviceName: hello-k8s
-              servicePort: 8080
+              servicePort: http

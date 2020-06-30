@@ -55,6 +55,24 @@ resource "helm_release" "helmOperator" {
     value = local.helmOperator.secret
   }
 
+  set {
+    name  = "git.config.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "git.config.secretName"
+    value = "helm-operator-git-config"
+  }
+
+  set {
+    name  = "git.config.data"
+    value = <<EOF
+        [url "http://${random_password.azdo_git_proxy[each.key].result}@azdo-git-proxy.azdo-git-proxy"]
+          insteadOf = https://dev.azure.com
+        EOF
+  }
+
   depends_on = [
     kubernetes_namespace.k8sNs
   ]

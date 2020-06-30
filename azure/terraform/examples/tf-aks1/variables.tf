@@ -78,3 +78,14 @@ variable "aksConfiguration" {
     }))
   })
 }
+
+variable "azdo_git_proxy" {
+  description = "Configuration for Azure DevOps git proxy"
+  type = object({
+    chart             = string
+    repository        = string
+    version           = string
+    azdo_domain       = string
+    azdo_organization = string
+  })
+}
