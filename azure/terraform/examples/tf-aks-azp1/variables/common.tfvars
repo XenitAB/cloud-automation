@@ -1,0 +1,6 @@
+location               = "West Europe"
+locationShort          = "we"
+commonName             = "azp1"
+subscriptionCommonName = "tflab"
+aksCommonName          = "aks"
+coreCommonName         = "core"
