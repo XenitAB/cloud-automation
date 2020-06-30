@@ -8,6 +8,7 @@ regions = [
 subscriptionCommonName    = "tflab"
 coreCommonName            = "core"
 ownerServicePrincipalName = "sp-sub-tflab-all-owner"
+partner_id                = "2501985"
 
 kvDefaultPermissions = {
   key_permissions = [

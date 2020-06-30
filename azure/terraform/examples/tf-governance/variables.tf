@@ -21,12 +21,17 @@ variable "coreCommonName" {
   type        = string
 }
 
+variable "partner_id" {
+  description = "The partner id used for service principals (PAL - Partner Admin Link)"
+  type        = string
+}
+
 variable "rgConfig" {
   description = "Resource group configuration"
   type = list(
     object({
       commonName  = string
-      delegateAks = bool # Delegate aks permissions 
+      delegateAks = bool # Delegate aks permissions
       delegateKv  = bool # Delegate KeyVault creation
       delegateSe  = bool # Delegate Service Endpoint permissions
       delegateSp  = bool # Delegate Service Principal

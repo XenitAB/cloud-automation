@@ -49,12 +49,6 @@ variable "coreCommonName" {
   type        = string
 }
 
-
-variable "k8sSaNamespace" {
-  description = "The namespaced used to store service accounts."
-  type        = string
-}
-
 variable "aksConfiguration" {
   description = "The Azure Kubernetes Service (AKS) configuration"
   type = object({
@@ -79,13 +73,15 @@ variable "aksConfiguration" {
   })
 }
 
-variable "azdo_git_proxy" {
-  description = "Configuration for Azure DevOps git proxy"
+variable "azure_pipelines_agent" {
+  description = "Azure Pipelines Agent Configuration"
   type = object({
-    chart             = string
-    repository        = string
-    version           = string
-    azdo_domain       = string
-    azdo_organization = string
+    helm_chart_name    = string
+    helm_chart_version = string
+    helm_chart_repo    = string
+    namespace          = string
+    replicas           = number
+    pool_name_prefix   = string
+    azdo_organization  = string
   })
 }

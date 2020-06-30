@@ -10,7 +10,7 @@ resource "kubernetes_cluster_role_binding" "k8sCrbViewListNs" {
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "cr-list-namespaces"
+    name      = "list-namespaces"
   }
   subject {
     kind      = "Group"
@@ -35,7 +35,7 @@ resource "kubernetes_cluster_role_binding" "k8sCrbEditListNs" {
   role_ref {
     api_group = "rbac.authorization.k8s.io"
     kind      = "ClusterRole"
-    name      = "cr-list-namespaces"
+    name      = "list-namespaces"
   }
   subject {
     kind      = "Group"

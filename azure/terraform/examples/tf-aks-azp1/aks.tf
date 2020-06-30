@@ -44,7 +44,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     load_balancer_sku = "standard"
     load_balancer_profile {
       outbound_ip_prefix_ids = [
-        local.aksPipPrefixId
+        local.azpPipPrefixId
       ]
     }
   }
@@ -56,12 +56,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   role_based_access_control {
     enabled = true
-
-    azure_active_directory {
-      client_app_id     = local.aksAadApps.aksClientAppClientId
-      server_app_id     = local.aksAadApps.aksServerAppClientId
-      server_app_secret = local.aksAadApps.aksServerAppClientSecret
-    }
   }
 
   linux_profile {

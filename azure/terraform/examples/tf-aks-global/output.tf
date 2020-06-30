@@ -19,3 +19,18 @@ output "k8sNamespaces" {
   value = var.k8sNamespaces
 }
 
+output "aksAuthorizedIps" {
+  value = concat(
+    var.aksAuthorizedIps,
+    local.aksPipPrefixes,
+    local.azpPipPrefixes
+  )
+}
+
+output "aksPipPrefixes" {
+  value = azurerm_public_ip_prefix.aks
+}
+
+output "azpPipPrefixes" {
+  value = azurerm_public_ip_prefix.azp
+}

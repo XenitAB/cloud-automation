@@ -96,7 +96,7 @@ resource "azuread_application" "aadAppAksClient" {
 
     resource_access {
       # Server app Oauth2 permissions id
-      id   = lookup(azuread_application.aadAppAksServer.oauth2_permissions[0], "id")
+      id = [for permission in azuread_application.aadAppAksServer.oauth2_permissions : permission.id][0]
       type = "Scope"
     }
   }
