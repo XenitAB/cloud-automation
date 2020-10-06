@@ -96,6 +96,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "aksNodePools" {
     each.value.node_labels
   )
 
+  tags = {
+    azp_cluster = var.environmentShort
+  }
+
   availability_zones = [
     "1",
     "2",
