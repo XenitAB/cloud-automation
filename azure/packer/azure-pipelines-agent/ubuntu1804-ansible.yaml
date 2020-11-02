@@ -1,0 +1,120 @@
+# playbook.yml
+- name: "Provision Image"
+  hosts: default
+  become: true
+
+  tasks:
+    - name: Set fact for default packages
+      set_fact:
+        default_packages:
+          - ca-certificates
+          - curl
+          - jq
+          - git
+          - iputils-ping
+          - libcurl4
+          - libicu60
+          - libunwind8
+          - wget
+          - netcat
+          - unzip
+          - build-essential
+          - openssh-client
+          - mono-complete
+          - software-properties-common
+          - apt-transport-https
+          - python3
+          - python3-setuptools
+          - python3-pip
+
+    - name: install default_packages
+      apt:
+        name: "{{ default_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: Set fact for azure-cli prerequisite packages
+      set_fact:
+        azure_cli_prereq_packages:
+          - ca-certificates
+          - curl
+          - apt-transport-https
+          - lsb-release
+          - gnupg
+
+    - name: install azure_cli_prereq_packages
+      apt:
+        name: "{{ azure_cli_prereq_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: Add APT signing key from Microsoft
+      apt_key:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        keyring: /etc/apt/trusted.gpg.d/microsoft.gpg
+        state: present
+
+    - name: Add azure-cli repository into sources list
+      apt_repository:
+        repo: "deb https://packages.microsoft.com/repos/azure-cli/ {{ ansible_distribution_release | lower }} main"
+        state: present
+        filename: azure-cli
+
+    - name: Install azure-cli
+      apt:
+        name: azure-cli
+        state: present
+        update_cache: yes
+
+    - name: Install packages-microsoft-prod.deb
+      apt:
+        deb: "https://packages.microsoft.com/config/{{ ansible_distribution | lower }}/{{ ansible_distribution_version }}/packages-microsoft-prod.deb"
+
+    - name: Set fact for Moby (Docker client) packages
+      set_fact:
+        moby_packages:
+          - moby-engine
+          - moby-cli
+          - moby-buildx
+
+    - name: install moby_packages
+      apt:
+        name: "{{ moby_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: Start and enable Moby (Docker) service
+      systemd:
+        name: docker
+        state: started
+        daemon_reload: yes
+
+    - name: Set fact for powershell packages
+      set_fact:
+        powershell_packages:
+          - powershell
+
+    - name: install powershell_packages
+      apt:
+        name: "{{ powershell_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: apt upgrade
+      apt:
+        upgrade: yes
+        update_cache: yes
+
+    - name: apt autoremove
+      apt:
+        autoremove: yes
+
+    - name: apt autoclean
+      apt:
+        autoclean: yes
+
+    - name: cleanup /var/lib/apt/lists/
+      shell: /bin/rm -rf /var/lib/apt/lists/*
+
+    - name: cleanup /etc/apt/sources.list.d/
+      shell: /bin/rm -rf /etc/apt/sources.list.d/*
