@@ -32,6 +32,7 @@
     },
     {
       "type": "ansible",
+      "use_proxy": false,
       "playbook_file": "{{template_dir}}/ubuntu1804-ansible.yaml"
     },
     {
