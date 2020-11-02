@@ -20,7 +20,6 @@
       "image_publisher": "Canonical",
       "image_offer": "UbuntuServer",
       "image_sku": "18.04-LTS",
-      "location": "West Europe",
       "vm_size": "Standard_DS2_v2"
     }
   ],
