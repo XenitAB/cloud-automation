@@ -32,7 +32,7 @@
     },
     {
       "type": "ansible",
-      "playbook_file": "./ubuntu1804-ansible.yaml"
+      "playbook_file": "{{template_dir}}/ubuntu1804-ansible.yaml"
     },
     {
       "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E sh '{{ .Path }}'",
