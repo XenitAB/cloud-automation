@@ -89,6 +89,7 @@
         name: docker
         state: started
         daemon_reload: yes
+        enabled: yes
 
     - name: Set fact for powershell packages
       set_fact:
