@@ -197,35 +197,6 @@ Process {
         $ENV:ARM_CLIENT_ID = $ENV:servicePrincipalId
         $ENV:ARM_CLIENT_SECRET = $ENV:servicePrincipalKey
         $ENV:ARM_TENANT_ID = $ENV:tenantId
-
-        if ($createStorageAccount) {
-            $createRg = Invoke-Call ([ScriptBlock]::Create("$azBin group create --name `"$($tfBackendResourceGroup)`" --location `"$($tfBackendResourceGroupLocation)`" --output json")) | ConvertFrom-Json
-            if ($createRg.properties.provisioningState -eq "Succeeded") {
-                Log-Message -message "INFO: Azure Resource Group $($tfBackendResourceGroup) successfully provisioned in $($tfBackendResourceGroupLocation)."
-            }
-            else {
-                Log-Message -message "ERROR: Azure Resource Group $($tfBackendResourceGroup) failed to provision in $($tfBackendResourceGroupLocation)."
-                exit 1
-            }
-
-            $createStrg = Invoke-Call ([ScriptBlock]::Create("$azBin storage account create --resource-group `"$($tfBackendResourceGroup)`" --name `"$($tfBackendStorageAccountName)`" --kind `"$($tfBackendStorageAccountKind)`" --output json")) | ConvertFrom-Json
-            if ($createStrg.provisioningState -eq "Succeeded") {
-                Log-Message -message "INFO: Azure Storage Account $($tfBackendStorageAccountName) successfully provisioned in resource group $($tfBackendResourceGroup)."
-            }
-            else {
-                Log-Message -message "ERROR: Azure Storage Account $($tfBackendStorageAccountName) failed to provision in resource group $($tfBackendResourceGroup)."
-                exit 1
-            }
-
-            $createContainer = Invoke-Call ([ScriptBlock]::Create("$azBin storage container create --account-name `"$($tfBackendStorageAccountName)`" --name `"$($tfBackendContainerName)`" --output json")) | ConvertFrom-Json
-            if ($createContainer.created -eq $true) {
-                Log-Message -message "INFO: Azure Storage Account Container $($tfBackendContainerName) created in $($tfBackendStorageAccountName)."
-            }
-            else {
-                Log-Message -message "INFO: Azure Storage Account Container $($tfBackendContainerName) already exists in $($tfBackendStorageAccountName)."
-            }
-        }
-
     }
     else {
         try {
@@ -240,6 +211,34 @@ Process {
         }
         catch {
             Write-Error "OPA (Open Policy Agent) isn't installed"
+        }
+    }
+
+    if ($createStorageAccount) {
+        $createRg = Invoke-Call ([ScriptBlock]::Create("$azBin group create --name `"$($tfBackendResourceGroup)`" --location `"$($tfBackendResourceGroupLocation)`" --output json")) | ConvertFrom-Json
+        if ($createRg.properties.provisioningState -eq "Succeeded") {
+            Log-Message -message "INFO: Azure Resource Group $($tfBackendResourceGroup) successfully provisioned in $($tfBackendResourceGroupLocation)."
+        }
+        else {
+            Log-Message -message "ERROR: Azure Resource Group $($tfBackendResourceGroup) failed to provision in $($tfBackendResourceGroupLocation)."
+            exit 1
+        }
+
+        $createStrg = Invoke-Call ([ScriptBlock]::Create("$azBin storage account create --resource-group `"$($tfBackendResourceGroup)`" --name `"$($tfBackendStorageAccountName)`" --kind `"$($tfBackendStorageAccountKind)`" --output json")) | ConvertFrom-Json
+        if ($createStrg.provisioningState -eq "Succeeded") {
+            Log-Message -message "INFO: Azure Storage Account $($tfBackendStorageAccountName) successfully provisioned in resource group $($tfBackendResourceGroup)."
+        }
+        else {
+            Log-Message -message "ERROR: Azure Storage Account $($tfBackendStorageAccountName) failed to provision in resource group $($tfBackendResourceGroup)."
+            exit 1
+        }
+
+        $createContainer = Invoke-Call ([ScriptBlock]::Create("$azBin storage container create --account-name `"$($tfBackendStorageAccountName)`" --name `"$($tfBackendContainerName)`" --output json")) | ConvertFrom-Json
+        if ($createContainer.created -eq $true) {
+            Log-Message -message "INFO: Azure Storage Account Container $($tfBackendContainerName) created in $($tfBackendStorageAccountName)."
+        }
+        else {
+            Log-Message -message "INFO: Azure Storage Account Container $($tfBackendContainerName) already exists in $($tfBackendStorageAccountName)."
         }
     }
 
