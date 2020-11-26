@@ -11,11 +11,11 @@ No guarantees for anything, but feel free to do a PR or post an issue. If you ne
 
 ## Azure
 
-### AWS Terraform
+### Azure Terraform
 
 * [Azure Examples Readme](azure/terraform/examples/README.md)
 
-### AWS Ansible
+### Azure Ansible
 
 * [Configure EKS Readme](azure/ansible/configure-aks/README.md)
 
